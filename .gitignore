@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Environment
+.env
+.env.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+
+# Logs
+logfile.log
+*.log
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+
+# LaTeX temp files
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Generated PDFs (local storage)
+data/
+
+# Legacy (pre-refactor)
+app_/
+Auth/
+Database/
+SecretManager/
+OutputPdfs/
+Test_files/
+testing/
+temp/
+dump.rdb
+*.ipynb
+
+# Secrets
+localKeys.py
+localKeys1.py
+
+# GCS / Service Account credentials
+credentials/
+*.json
+!pyproject.toml
+
+# Scrapped data (LinkedIn leads, user lists, keys)
+scrapped-data/
+
+# Sales data
+sales/

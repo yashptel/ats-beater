@@ -1,0 +1,2096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATS Beater | AI Resume Tailoring | Yash Patel</title>
+  <meta name="description" content="Upload your resume, paste a job description, and get an ATS-optimized tailored resume in seconds. Powered by AI and LaTeX precision.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23FB4100' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35'/%3E%3Cpath d='M14 2v5a1 1 0 0 0 1 1h5'/%3E%3Cpath d='M16 14a2 2 0 0 0-2 2'/%3E%3Cpath d='M16 22a2 2 0 0 1-2-2'/%3E%3Cpath d='M20 14a2 2 0 0 1 2 2'/%3E%3Cpath d='M20 22a2 2 0 0 0 2-2'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+       DESIGN TOKENS
+       ═══════════════════════════════════════════════════════════════ */
+    :root {
+      --deep: #0F1B2E;
+      --card: #162B45;
+      --card-border: rgba(1,169,219,0.14);
+      --navy: #1A3350;
+      --sidebar-bg: #0D2035;
+      --teal: #01A9DB;
+      --orange: #FB4100;
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --text-dim: #64748B;
+      --green: #10B981;
+      --border-subtle: rgba(1,169,219,0.1);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       RESET & BASE
+       ═══════════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--deep);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(251,65,0,0.15); border-radius: 3px; }
+
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       UTILITY
+       ═══════════════════════════════════════════════════════════════ */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .serif { font-family: 'Instrument Serif', Georgia, serif; }
+    .text-teal { color: var(--teal); }
+    .text-orange { color: var(--orange); }
+    .text-dim { color: var(--text-dim); }
+    .text-secondary { color: var(--text-secondary); }
+
+    .section { padding: 100px 0; position: relative; }
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--teal); margin-bottom: 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-label::before {
+      content: ''; width: 24px; height: 1px;
+      background: var(--teal); display: inline-block;
+    }
+    .section-title {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -1.5px; margin-bottom: 20px;
+    }
+    .section-subtitle {
+      font-size: 17px; color: var(--text-secondary);
+      max-width: 560px; line-height: 1.7;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       NAVBAR
+       ═══════════════════════════════════════════════════════════════ */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 72px; display: flex; align-items: center;
+      background: rgba(15,27,46,0.85);
+      backdrop-filter: blur(24px) saturate(1.4);
+      border-bottom: 1px solid rgba(1,169,219,0.06);
+      transition: all 0.3s ease;
+    }
+    .navbar.scrolled {
+      background: rgba(15,27,46,0.96);
+      border-bottom-color: rgba(1,169,219,0.12);
+      box-shadow: 0 4px 40px rgba(0,0,0,0.3);
+    }
+    .navbar .container {
+      display: flex; align-items: center; justify-content: space-between; width: 100%;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800; font-size: 16px; letter-spacing: -0.5px;
+    }
+    .nav-brand-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, rgba(251,65,0,0.15), rgba(251,65,0,0.05));
+      border: 1px solid rgba(251,65,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 500; color: var(--text-dim);
+      transition: color 0.2s; letter-spacing: 0.2px;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+    .nav-cta {
+      background: linear-gradient(135deg, var(--orange), #D13600);
+      border: 1px solid rgba(251,65,0,0.4);
+      color: #fff !important; padding: 10px 24px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace !important;
+      font-weight: 700 !important; font-size: 11px !important;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      transition: all 0.3s ease; cursor: pointer;
+    }
+    .nav-cta:hover {
+      background: linear-gradient(135deg, #FF5519, var(--orange));
+      box-shadow: 0 0 30px rgba(251,65,0,0.25);
+      transform: translateY(-1px);
+    }
+
+    .mobile-toggle {
+      display: none; background: none; border: none; cursor: pointer;
+      width: 32px; height: 32px; position: relative;
+    }
+    .mobile-toggle span {
+      display: block; width: 20px; height: 2px;
+      background: var(--text-secondary); border-radius: 2px;
+      position: absolute; left: 6px; transition: all 0.3s ease;
+    }
+    .mobile-toggle span:nth-child(1) { top: 9px; }
+    .mobile-toggle span:nth-child(2) { top: 15px; }
+    .mobile-toggle span:nth-child(3) { top: 21px; }
+    .mobile-toggle.open span:nth-child(1) { top: 15px; transform: rotate(45deg); }
+    .mobile-toggle.open span:nth-child(2) { opacity: 0; }
+    .mobile-toggle.open span:nth-child(3) { top: 15px; transform: rotate(-45deg); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh; display: flex; align-items: center;
+      padding-top: 72px; position: relative; overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; pointer-events: none;
+    }
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(1,169,219,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(1,169,219,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent);
+    }
+    .hero-glow-1 {
+      position: absolute; width: 600px; height: 600px;
+      top: -200px; right: -100px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(251,65,0,0.08), transparent 70%);
+      filter: blur(80px);
+    }
+    .hero-glow-2 {
+      position: absolute; width: 500px; height: 500px;
+      bottom: -100px; left: -100px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(1,169,219,0.06), transparent 70%);
+      filter: blur(80px);
+    }
+
+    .hero .container { position: relative; z-index: 1; }
+    .hero-layout {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 48px; align-items: center;
+    }
+    .hero-content { }
+    .hero-illustration {
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hero-svg {
+      width: 100%; max-width: 480px; height: auto;
+    }
+    /* Hero SVG element styles */
+    .hero-doc-plain { animation: float 6s ease-in-out infinite; }
+    .hero-doc-polished { animation: float 6s ease-in-out infinite; animation-delay: -3s; }
+    .hero-arrow-path { }
+    .hero-sparkle { transform-origin: center; }
+    .hero-sparkle:nth-child(1) { animation: twinkle 3s ease-in-out infinite; }
+    .hero-sparkle:nth-child(2) { animation: twinkle 3s ease-in-out infinite 0.5s; }
+    .hero-sparkle:nth-child(3) { animation: twinkle 3s ease-in-out infinite 1s; }
+    .hero-sparkle:nth-child(4) { animation: twinkle 3s ease-in-out infinite 1.5s; }
+    .hero-sparkle:nth-child(5) { animation: twinkle 3s ease-in-out infinite 2s; }
+    .hero-sparkles .hero-sparkle:nth-child(1) { animation: twinkle 3s ease-in-out infinite 0.2s; }
+    .hero-sparkles .hero-sparkle:nth-child(2) { animation: twinkle 3s ease-in-out infinite 0.7s; }
+    .hero-sparkles .hero-sparkle:nth-child(3) { animation: twinkle 3s ease-in-out infinite 1.2s; }
+    .hero-sparkles .hero-sparkle:nth-child(4) { animation: twinkle 3s ease-in-out infinite 1.8s; }
+    .hero-sparkles .hero-sparkle:nth-child(5) { animation: twinkle 3s ease-in-out infinite 2.3s; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px 6px 8px; border-radius: 100px;
+      background: rgba(1,169,219,0.06);
+      border: 1px solid rgba(1,169,219,0.15);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 600; color: var(--teal);
+      letter-spacing: 0.5px; margin-bottom: 32px;
+    }
+    .hero-badge-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--teal); position: relative;
+    }
+    .hero-badge-dot::after {
+      content: ''; position: absolute; inset: -3px; border-radius: 50%;
+      background: var(--teal); opacity: 0.3;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 0.3; }
+      50% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       SVG ANIMATION KEYFRAMES
+       ═══════════════════════════════════════════════════════════════ */
+    /* Continuous / Idle */
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    @keyframes float-subtle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.5); opacity: 1; }
+    }
+    @keyframes twinkle {
+      0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+      50% { transform: scale(1.2) rotate(20deg); opacity: 1; }
+    }
+    @keyframes dash-draw {
+      from { stroke-dashoffset: 100; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes check-draw {
+      from { stroke-dashoffset: 30; }
+      to { stroke-dashoffset: 0; }
+    }
+    /* Hover-triggered */
+    @keyframes bounce-up {
+      0% { transform: translateY(0); }
+      40% { transform: translateY(-6px); }
+      60% { transform: translateY(2px); }
+      80% { transform: translateY(-1px); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes wiggle {
+      0% { transform: rotate(0deg); }
+      20% { transform: rotate(-4deg); }
+      40% { transform: rotate(4deg); }
+      60% { transform: rotate(-2deg); }
+      80% { transform: rotate(2deg); }
+      100% { transform: rotate(0deg); }
+    }
+    @keyframes stamp-down {
+      0% { transform: scale(1.4); }
+      50% { transform: scale(0.95); }
+      70% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    @keyframes confetti-burst {
+      0% { transform: translate(0, 0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--cx), var(--cy)) scale(0); opacity: 0; }
+    }
+    @keyframes expand-ring {
+      0% { transform: scale(1); opacity: 0.4; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+    @keyframes paper-land {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+      100% { transform: scale(1); }
+    }
+    @keyframes sparkle-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .hero-title {
+      font-size: clamp(40px, 6vw, 72px);
+      font-weight: 900; line-height: 1.05;
+      letter-spacing: -3px; margin-bottom: 24px;
+    }
+    .hero-title .serif {
+      font-weight: 400; font-style: italic;
+      background: linear-gradient(135deg, var(--teal), #47d4ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-desc {
+      font-size: 18px; line-height: 1.7;
+      color: var(--text-secondary); max-width: 520px;
+      margin-bottom: 40px;
+    }
+    .hero-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .btn-hero {
+      background: linear-gradient(135deg, var(--orange), #D13600);
+      border: 1px solid rgba(251,65,0,0.4);
+      color: #fff; padding: 16px 36px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700; font-size: 13px;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s ease;
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .btn-hero:hover {
+      background: linear-gradient(135deg, #FF5519, var(--orange));
+      box-shadow: 0 0 50px rgba(251,65,0,0.3), 0 8px 30px rgba(0,0,0,0.4);
+      transform: translateY(-2px);
+    }
+    .btn-hero-ghost {
+      background: transparent; color: var(--text-secondary);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 16px 32px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600; font-size: 12px;
+      letter-spacing: 0.5px; cursor: pointer;
+      transition: all 0.3s ease; text-decoration: none;
+    }
+    .btn-hero-ghost:hover {
+      border-color: rgba(1,169,219,0.25); color: var(--teal);
+    }
+
+    .hero-stats {
+      display: flex; gap: 48px; margin-top: 56px;
+      padding-top: 32px; border-top: 1px solid rgba(1,169,219,0.08);
+    }
+    .hero-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px; font-weight: 800; letter-spacing: -1px;
+    }
+    .hero-stat-label {
+      font-size: 12px; color: var(--text-dim);
+      margin-top: 4px; letter-spacing: 0.3px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       HOW IT WORKS
+       ═══════════════════════════════════════════════════════════════ */
+    .steps-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 2px; margin-top: 56px;
+      background: rgba(1,169,219,0.06); border-radius: 16px;
+      overflow: hidden;
+    }
+    .step-card {
+      background: var(--deep); padding: 40px 32px;
+      position: relative; transition: all 0.3s ease;
+    }
+    .step-card:hover { background: rgba(7,37,61,0.5); }
+    .step-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 64px; font-weight: 800;
+      color: rgba(1,169,219,0.08); line-height: 1;
+      position: absolute; top: 20px; right: 24px;
+    }
+    .step-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 24px; position: relative;
+    }
+    .step-icon.upload {
+      background: rgba(251,65,0,0.1); border: 1px solid rgba(251,65,0,0.2);
+    }
+    .step-icon.ai {
+      background: rgba(1,169,219,0.1); border: 1px solid rgba(1,169,219,0.2);
+    }
+    .step-icon.pdf {
+      background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
+    }
+    .step-icon svg { width: 22px; height: 22px; }
+    .step-title {
+      font-size: 18px; font-weight: 700;
+      margin-bottom: 12px; letter-spacing: -0.3px;
+    }
+    .step-desc {
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .coming-soon.reveal.visible {
+      opacity: 0.5;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       FEATURES
+       ═══════════════════════════════════════════════════════════════ */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 2px; margin-top: 56px;
+      background: rgba(1,169,219,0.06); border-radius: 16px;
+      overflow: hidden;
+    }
+    .feature-card {
+      background: var(--deep); padding: 36px 32px;
+      transition: all 0.3s ease;
+    }
+    .feature-card:hover { background: rgba(7,37,61,0.4); }
+    .feature-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+      background: rgba(1,169,219,0.06);
+      border: 1px solid rgba(1,169,219,0.12);
+    }
+    .feature-icon svg { width: 20px; height: 20px; color: var(--teal); }
+    .feature-title {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 8px; letter-spacing: -0.3px;
+    }
+    .feature-desc {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       ATS BOT SHOWCASE
+       ═══════════════════════════════════════════════════════════════ */
+    .atsbot-layout {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
+      align-items: center; margin-top: 56px;
+    }
+    .atsbot-capabilities { display: flex; flex-direction: column; gap: 24px; }
+    .atsbot-cap {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 20px; border-radius: 12px;
+      background: rgba(22,43,69,0.4);
+      border: 1px solid rgba(1,169,219,0.08);
+      transition: all 0.3s ease;
+    }
+    .atsbot-cap:hover {
+      background: rgba(22,43,69,0.7);
+      border-color: rgba(1,169,219,0.2);
+    }
+    .atsbot-cap-icon {
+      width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .atsbot-cap-icon svg { width: 18px; height: 18px; }
+    .atsbot-cap-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 4px;
+      letter-spacing: -0.2px;
+    }
+    .atsbot-cap-desc {
+      font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+    }
+
+    /* Mock chat window */
+    .atsbot-mock {
+      background: var(--sidebar-bg); border-radius: 16px;
+      border: 1px solid var(--card-border);
+      overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .atsbot-mock-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--card-border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .atsbot-mock-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--orange); box-shadow: 0 0 8px rgba(251,65,0,0.4);
+    }
+    .atsbot-mock-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      color: var(--text-primary);
+    }
+    .atsbot-mock-body {
+      padding: 20px; display: flex; flex-direction: column; gap: 12px;
+      min-height: 280px;
+    }
+    .atsbot-mock-msg {
+      max-width: 82%; padding: 10px 14px; border-radius: 12px;
+      font-size: 12.5px; line-height: 1.5;
+    }
+    .atsbot-mock-msg.user {
+      align-self: flex-end; background: rgba(251,65,0,0.12);
+      color: var(--text-primary); border-bottom-right-radius: 4px;
+    }
+    .atsbot-mock-msg.bot {
+      align-self: flex-start; background: rgba(1,169,219,0.08);
+      color: var(--text-primary); border-bottom-left-radius: 4px;
+    }
+    .atsbot-mock-tool {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: 500;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: 0.3px;
+      background: rgba(1,169,219,0.06); border: 1px solid rgba(1,169,219,0.12);
+      color: var(--teal);
+    }
+    .atsbot-mock-tool .mock-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--teal);
+      animation: blink 1.4s infinite both;
+    }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+    .atsbot-mock-input {
+      margin-top: auto; padding: 14px 18px;
+      border-top: 1px solid var(--card-border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .atsbot-mock-inputbox {
+      flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px; padding: 8px 12px; font-size: 11px;
+      color: var(--text-dim); font-family: 'Inter', sans-serif;
+    }
+    .atsbot-mock-send {
+      background: linear-gradient(135deg, var(--orange), #D13600);
+      border: none; border-radius: 6px; padding: 7px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px; font-weight: 700; letter-spacing: 1px;
+      color: #fff; text-transform: uppercase;
+    }
+
+    @media (max-width: 768px) {
+      .atsbot-layout { grid-template-columns: 1fr; gap: 40px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PRICING
+       ═══════════════════════════════════════════════════════════════ */
+    .pricing-cards {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px; margin-top: 56px;
+    }
+    .price-card {
+      background: rgba(22,43,69,0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 36px 28px;
+      position: relative; transition: all 0.3s ease;
+    }
+    .price-card:hover {
+      border-color: rgba(1,169,219,0.3);
+      box-shadow: 0 0 50px rgba(1,169,219,0.08);
+      transform: translateY(-4px);
+    }
+    .price-card.featured {
+      border-color: rgba(251,65,0,0.3);
+      background: linear-gradient(135deg, rgba(251,65,0,0.06), rgba(22,43,69,0.8));
+    }
+    .price-card.featured:hover {
+      border-color: rgba(251,65,0,0.5);
+      box-shadow: 0 0 60px rgba(251,65,0,0.1);
+    }
+    .price-badge {
+      position: absolute; top: -12px; right: 20px;
+      background: linear-gradient(135deg, var(--orange), #D13600);
+      color: #fff; padding: 4px 14px; border-radius: 100px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .price-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px; font-weight: 600; color: var(--text-dim);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .price-amount {
+      font-size: 44px; font-weight: 900;
+      letter-spacing: -2px; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .price-amount .currency {
+      font-size: 22px; font-weight: 700;
+      vertical-align: super; margin-right: 2px;
+      color: var(--text-secondary);
+    }
+    .price-per {
+      font-size: 13px; color: var(--text-dim); margin-bottom: 24px;
+    }
+    .price-features {
+      list-style: none; margin-bottom: 28px;
+    }
+    .price-features li {
+      font-size: 14px; color: var(--text-secondary);
+      padding: 8px 0; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .price-features li:last-child { border-bottom: none; }
+    .price-features li svg {
+      width: 16px; height: 16px; flex-shrink: 0;
+    }
+    .price-features li .check { color: var(--green); }
+    .btn-price {
+      width: 100%; padding: 14px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700; font-size: 12px;
+      letter-spacing: 1px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s ease;
+      text-align: center; display: block;
+    }
+    .btn-price.primary {
+      background: linear-gradient(135deg, var(--orange), #D13600);
+      border: 1px solid rgba(251,65,0,0.4); color: #fff;
+    }
+    .btn-price.primary:hover {
+      box-shadow: 0 0 30px rgba(251,65,0,0.25);
+      transform: translateY(-1px);
+    }
+    .btn-price.secondary {
+      background: transparent; color: var(--teal);
+      border: 1px solid rgba(1,169,219,0.2);
+    }
+    .btn-price.secondary:hover {
+      background: rgba(1,169,219,0.06);
+      border-color: rgba(1,169,219,0.35);
+    }
+
+    .price-free-banner {
+      background: rgba(1,169,219,0.04);
+      border: 1px solid rgba(1,169,219,0.12);
+      border-radius: 12px; padding: 24px 32px;
+      margin-top: 32px; text-align: center;
+    }
+    .price-free-banner p {
+      font-size: 15px; color: var(--text-secondary);
+    }
+    .price-free-banner strong { color: var(--teal); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       FAQ
+       ═══════════════════════════════════════════════════════════════ */
+    .faq-list { margin-top: 48px; max-width: 720px; }
+    .faq-item {
+      border-bottom: 1px solid rgba(1,169,219,0.08);
+    }
+    .faq-question {
+      width: 100%; background: none; border: none;
+      color: var(--text-primary); text-align: left;
+      padding: 20px 0; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 16px; font-weight: 600;
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 16px;
+      transition: color 0.2s;
+    }
+    .faq-question:hover { color: var(--teal); }
+    .faq-chevron {
+      width: 20px; height: 20px; flex-shrink: 0;
+      color: var(--text-dim); transition: transform 0.3s ease;
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .faq-item.open .faq-answer { max-height: 300px; }
+    .faq-answer-inner {
+      padding-bottom: 20px;
+      font-size: 14px; color: var(--text-secondary); line-height: 1.8;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       LEGAL SECTIONS
+       ═══════════════════════════════════════════════════════════════ */
+    .legal-section {
+      padding: 80px 0;
+      border-top: 1px solid rgba(1,169,219,0.06);
+    }
+    .legal-title {
+      font-size: 28px; font-weight: 800;
+      letter-spacing: -1px; margin-bottom: 32px;
+    }
+    .legal-content {
+      max-width: 720px;
+    }
+    .legal-content h3 {
+      font-size: 16px; font-weight: 700;
+      margin-top: 28px; margin-bottom: 10px;
+      color: var(--text-primary);
+    }
+    .legal-content p, .legal-content li {
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.8; margin-bottom: 12px;
+    }
+    .legal-content ul {
+      padding-left: 20px; margin-bottom: 16px;
+    }
+    .legal-content ul li {
+      margin-bottom: 6px;
+    }
+    .legal-date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.5px; margin-bottom: 24px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CONTACT
+       ═══════════════════════════════════════════════════════════════ */
+    .contact-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px; margin-top: 48px;
+    }
+    .contact-card {
+      background: rgba(22,43,69,0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 32px 24px;
+      text-align: center; transition: all 0.3s ease;
+    }
+    .contact-card:hover {
+      border-color: rgba(1,169,219,0.25);
+      transform: translateY(-2px);
+    }
+    .contact-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(1,169,219,0.06);
+      border: 1px solid rgba(1,169,219,0.12);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .contact-icon svg { width: 22px; height: 22px; color: var(--teal); }
+    .contact-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 600; color: var(--text-dim);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .contact-value {
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .contact-value a {
+      color: var(--teal); transition: color 0.2s;
+    }
+    .contact-value a:hover { color: #47d4ff; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CTA BAND
+       ═══════════════════════════════════════════════════════════════ */
+    .cta-band {
+      padding: 80px 0; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .cta-band::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(251,65,0,0.04), rgba(1,169,219,0.04));
+      border-top: 1px solid rgba(251,65,0,0.08);
+      border-bottom: 1px solid rgba(1,169,219,0.08);
+    }
+    .cta-band .container { position: relative; z-index: 1; }
+    .cta-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800; letter-spacing: -1.5px;
+      margin-bottom: 16px;
+    }
+    .cta-desc {
+      font-size: 16px; color: var(--text-secondary);
+      margin-bottom: 32px; max-width: 480px; margin-inline: auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════════════════ */
+    .footer {
+      padding: 48px 0 32px;
+      border-top: 1px solid rgba(1,169,219,0.06);
+    }
+    .footer-top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 40px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid rgba(1,169,219,0.06);
+      margin-bottom: 24px;
+    }
+    .footer-brand p {
+      font-size: 13px; color: var(--text-dim);
+      max-width: 280px; margin-top: 12px; line-height: 1.6;
+    }
+    .footer-links {
+      display: flex; gap: 48px;
+    }
+    .footer-col-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 700; color: var(--text-dim);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .footer-col a {
+      display: block; font-size: 13px; color: var(--text-secondary);
+      padding: 4px 0; transition: color 0.2s;
+    }
+    .footer-col a:hover { color: var(--teal); }
+    .footer-bottom {
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .footer-copy {
+      font-size: 12px; color: var(--text-dim);
+    }
+    .footer-legal {
+      display: flex; gap: 24px;
+    }
+    .footer-legal a {
+      font-size: 12px; color: var(--text-dim);
+      transition: color 0.2s;
+    }
+    .footer-legal a:hover { color: var(--text-secondary); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       ANIMATIONS
+       ═══════════════════════════════════════════════════════════════ */
+    .reveal {
+      opacity: 0; transform: translateY(30px);
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       MOBILE
+       ═══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .nav-links.open {
+        display: flex; flex-direction: column;
+        position: absolute; top: 72px; left: 0; right: 0;
+        background: rgba(15,27,46,0.98);
+        backdrop-filter: blur(24px);
+        border-bottom: 1px solid rgba(1,169,219,0.1);
+        padding: 20px 24px; gap: 16px;
+        z-index: 99;
+      }
+      .nav-links.open a { font-size: 15px; padding: 12px 0; min-height: 44px; display: flex; align-items: center; }
+      .nav-links.open .nav-cta {
+        text-align: center; margin-top: 8px;
+      }
+      .mobile-toggle { display: block; }
+
+      .hero { min-height: auto; padding: 120px 0 80px; }
+      .hero-layout { grid-template-columns: 1fr; text-align: center; gap: 32px; }
+      .hero-illustration { order: 2; }
+      .hero-svg { max-width: 320px; }
+      .hero-content { order: 1; }
+      .hero-desc { margin-inline: auto; }
+      .hero-actions { justify-content: center; }
+      .hero-stats { gap: 24px; flex-wrap: wrap; justify-content: center; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .pricing-cards { grid-template-columns: 1fr; max-width: 400px; margin-inline: auto; }
+      .contact-grid { grid-template-columns: 1fr; }
+      #enterprise .container > div { grid-template-columns: 1fr !important; gap: 32px !important; }
+      .footer-top { flex-direction: column; }
+      .footer-links { flex-wrap: wrap; gap: 32px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+
+    @media (max-width: 480px) {
+      .container { padding: 0 16px; }
+      .section { padding: 48px 0; }
+      .hero { padding: 80px 0 60px; }
+      .hero-svg { max-width: 260px; }
+      .hero-title { letter-spacing: -1px; line-height: 1.15; }
+      .hero-actions { flex-direction: column; width: 100%; }
+      .btn-hero, .btn-hero-ghost { width: 100%; text-align: center; justify-content: center; padding: 14px 20px; font-size: 12px; }
+      .hero-stats { gap: 16px; }
+      .section-title { letter-spacing: -0.5px; line-height: 1.2; }
+      .step-card { padding: 24px 16px; }
+      .step-number { font-size: 36px; }
+      .price-card { padding: 24px 16px; }
+      .price-badge { right: 8px; font-size: 9px; padding: 3px 10px; }
+      .price-features li { font-size: 13px; gap: 8px; }
+      .price-features li svg { min-width: 16px; flex-shrink: 0; }
+      .faq-item.open .faq-answer { max-height: 500px; }
+      .faq-question { font-size: 15px; }
+      .contact-card { padding: 20px 16px; }
+      .legal-section { padding: 48px 0; }
+      .legal-title { font-size: 22px; letter-spacing: -0.5px; }
+      .legal-content ul { padding-left: 12px; }
+      .cta-band { padding: 48px 0; }
+      .footer-links { flex-direction: column; gap: 24px; }
+      .footer-legal { flex-wrap: wrap; justify-content: center; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       ACCESSIBILITY — REDUCED MOTION
+       ═══════════════════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════════════
+       LOGO BELT — Infinite scroll
+       ═══════════════════════════════════════════════════════════════ */
+    .logo-belt {
+      overflow: hidden;
+      mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    }
+    .logo-belt-track {
+      display: flex;
+      align-items: center;
+      gap: 48px;
+      width: max-content;
+      animation: scrollLogos 30s linear infinite;
+    }
+    .logo-belt-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .logo-belt-item span {
+      font-family: 'Inter', sans-serif;
+      font-size: 9px;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .logo-belt-track img {
+      height: 36px;
+      width: auto;
+      opacity: 0.9;
+      transition: opacity 0.3s;
+      flex-shrink: 0;
+    }
+    .logo-belt-track img:hover {
+      opacity: 1;
+    }
+    @keyframes scrollLogos {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-doc-plain,
+      .hero-doc-polished,
+      .hero-sparkle,
+      .hero-sparkles .hero-sparkle,
+      .logo-belt-track {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       NAVBAR
+       ═══════════════════════════════════════════════════════════════ -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#" class="nav-brand">
+        <div class="nav-brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FB4100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35"/>
+            <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+            <path d="M16 14a2 2 0 0 0-2 2"/><path d="M16 22a2 2 0 0 1-2-2"/>
+            <path d="M20 14a2 2 0 0 1 2 2"/><path d="M20 22a2 2 0 0 0 2-2"/>
+          </svg>
+        </div>
+        ATS Beater
+      </a>
+
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+
+      <div class="nav-links" id="navLinks">
+        <a href="#how-it-works">How It Works</a>
+        <a href="#features">Features</a>
+        <a href="#ats-bot">ATS Bot</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a href="#enterprise">Enterprise</a>
+        <a href="#contact">Contact</a>
+        <a href="/#/login" class="nav-cta">Get Started Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="hero" id="hero">
+    <div class="hero-bg">
+      <div class="hero-grid"></div>
+      <div class="hero-glow-1"></div>
+      <div class="hero-glow-2"></div>
+    </div>
+    <div class="container">
+      <div class="hero-layout">
+        <div class="hero-content">
+          <div class="hero-badge reveal">
+            <span class="hero-badge-dot"></span>
+            AI-Powered Resume Tailoring
+          </div>
+          <h1 class="hero-title reveal reveal-delay-1">
+            Your resume,<br>
+            <span class="serif">tailored to every job</span>
+          </h1>
+          <p class="hero-desc reveal reveal-delay-2">
+            AI-tailored resumes that beat ATS screening. One upload, any job description, polished PDF in seconds.
+          </p>
+          <div class="hero-actions reveal reveal-delay-3">
+            <a href="/#/login" class="btn-hero">
+              Start for Free
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+            <a href="#how-it-works" class="btn-hero-ghost">See How It Works</a>
+          </div>
+          <div class="hero-stats reveal reveal-delay-3">
+            <div>
+              <div class="hero-stat-value text-orange">3</div>
+              <div class="hero-stat-label">Free resumes daily</div>
+            </div>
+            <div>
+              <div class="hero-stat-value text-teal">&lt;60s</div>
+              <div class="hero-stat-label">Per tailored resume</div>
+            </div>
+            <div>
+              <div class="hero-stat-value">LaTeX</div>
+              <div class="hero-stat-label">Professional typesetting</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-illustration reveal reveal-delay-2">
+          <svg class="hero-svg" viewBox="0 0 480 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="hero-arrow-grad" gradientUnits="userSpaceOnUse" x1="195" y1="175" x2="296" y2="175">
+                <stop offset="0%" stop-color="#FB4100"/>
+                <stop offset="100%" stop-color="#01A9DB"/>
+              </linearGradient>
+              <linearGradient id="hero-glow-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#01A9DB" stop-opacity="0.06"/>
+                <stop offset="100%" stop-color="#01A9DB" stop-opacity="0"/>
+              </linearGradient>
+              <filter id="hero-glow-teal" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="8" result="blur"/>
+                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+              </filter>
+            </defs>
+
+            <!-- Subtle background glow behind right doc -->
+            <ellipse cx="370" cy="200" rx="120" ry="130" fill="url(#hero-glow-bg)"/>
+
+            <!-- Plain document (left) — messy, unstructured, generic -->
+            <g class="hero-doc-plain">
+              <rect x="50" y="90" width="130" height="170" rx="10" fill="#1A3350" stroke="#475569" stroke-width="1.5"/>
+              <!-- Messy header — cramped, no hierarchy -->
+              <rect x="70" y="105" width="90" height="4" rx="2" fill="#475569" opacity="0.3"/>
+              <rect x="70" y="113" width="60" height="3" rx="1.5" fill="#475569" opacity="0.2"/>
+              <rect x="70" y="120" width="75" height="3" rx="1.5" fill="#475569" opacity="0.18"/>
+              <!-- Wall of text — no clear sections, uneven -->
+              <rect x="70" y="132" width="88" height="3" rx="1.5" fill="#475569" opacity="0.22"/>
+              <rect x="70" y="139" width="72" height="3" rx="1.5" fill="#475569" opacity="0.18"/>
+              <rect x="70" y="146" width="95" height="3" rx="1.5" fill="#475569" opacity="0.2"/>
+              <rect x="70" y="153" width="58" height="3" rx="1.5" fill="#475569" opacity="0.15"/>
+              <rect x="70" y="160" width="82" height="3" rx="1.5" fill="#475569" opacity="0.2"/>
+              <rect x="70" y="167" width="90" height="3" rx="1.5" fill="#475569" opacity="0.17"/>
+              <rect x="70" y="174" width="65" height="3" rx="1.5" fill="#475569" opacity="0.15"/>
+              <rect x="70" y="181" width="78" height="3" rx="1.5" fill="#475569" opacity="0.18"/>
+              <rect x="70" y="188" width="92" height="3" rx="1.5" fill="#475569" opacity="0.16"/>
+              <rect x="70" y="195" width="55" height="3" rx="1.5" fill="#475569" opacity="0.13"/>
+              <rect x="70" y="202" width="80" height="3" rx="1.5" fill="#475569" opacity="0.17"/>
+              <!-- Faded, no structure — just a block of grey -->
+              <rect x="70" y="216" width="70" height="3" rx="1.5" fill="#475569" opacity="0.14"/>
+              <rect x="70" y="223" width="85" height="3" rx="1.5" fill="#475569" opacity="0.12"/>
+              <rect x="70" y="230" width="48" height="3" rx="1.5" fill="#475569" opacity="0.1"/>
+            </g>
+
+            <!-- Straight transformation arrow (path, not line — gradient compat) -->
+            <path class="hero-arrow-path" d="M195 175 L288 175" stroke="url(#hero-arrow-grad)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+            <!-- Arrow chevron tip -->
+            <path d="M282 166 L296 175 L282 184" stroke="#01A9DB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+            <!-- Sparkle above arrow -->
+            <g class="hero-sparkle" style="transform-origin: 245px 155px;">
+              <path d="M245 146 L248 153 L255 155 L248 157 L245 164 L242 157 L235 155 L242 153 Z" fill="#FB4100" opacity="0.85"/>
+            </g>
+
+            <!-- Polished document (right) — structured, clear sections, ATS-optimised -->
+            <g class="hero-doc-polished" filter="url(#hero-glow-teal)">
+              <rect x="305" y="90" width="130" height="170" rx="10" fill="#162B45" stroke="#01A9DB" stroke-width="2"/>
+              <!-- Top accent bar -->
+              <rect x="305" y="90" width="130" height="4" rx="2" fill="#01A9DB" opacity="0.3"/>
+              <!-- Bold name header -->
+              <rect x="322" y="106" width="85" height="7" rx="3" fill="#01A9DB" opacity="0.6"/>
+              <!-- Contact line -->
+              <rect x="322" y="118" width="55" height="3" rx="1.5" fill="#94A3B8" opacity="0.35"/>
+              <!-- SECTION: "Experience" header -->
+              <rect x="322" y="132" width="42" height="4" rx="2" fill="#01A9DB" opacity="0.35"/>
+              <line x1="368" y1="134" x2="418" y2="134" stroke="#01A9DB" stroke-width="0.6" opacity="0.2"/>
+              <!-- Job title + company (bold + light) -->
+              <rect x="322" y="142" width="72" height="3.5" rx="1.5" fill="#94A3B8" opacity="0.55"/>
+              <rect x="322" y="149" width="50" height="2.5" rx="1.2" fill="#94A3B8" opacity="0.3"/>
+              <!-- Bullet points with teal markers -->
+              <rect x="322" y="157" width="3" height="3" rx="1" fill="#01A9DB" opacity="0.55"/>
+              <rect x="329" y="157.5" width="78" height="2.5" rx="1.2" fill="#94A3B8" opacity="0.45"/>
+              <rect x="322" y="164" width="3" height="3" rx="1" fill="#01A9DB" opacity="0.55"/>
+              <rect x="329" y="164.5" width="65" height="2.5" rx="1.2" fill="#94A3B8" opacity="0.4"/>
+              <rect x="322" y="171" width="3" height="3" rx="1" fill="#01A9DB" opacity="0.55"/>
+              <rect x="329" y="171.5" width="72" height="2.5" rx="1.2" fill="#94A3B8" opacity="0.42"/>
+              <!-- SECTION: "Skills" header -->
+              <rect x="322" y="184" width="28" height="4" rx="2" fill="#01A9DB" opacity="0.35"/>
+              <line x1="354" y1="186" x2="418" y2="186" stroke="#01A9DB" stroke-width="0.6" opacity="0.2"/>
+              <!-- Skill tag chips — rounded, highlighted -->
+              <rect x="322" y="194" width="30" height="10" rx="5" fill="#01A9DB" opacity="0.12" stroke="#01A9DB" stroke-width="0.6" stroke-opacity="0.3"/>
+              <rect x="327" y="197" width="20" height="4" rx="2" fill="#01A9DB" opacity="0.4"/>
+              <rect x="357" y="194" width="25" height="10" rx="5" fill="#01A9DB" opacity="0.12" stroke="#01A9DB" stroke-width="0.6" stroke-opacity="0.3"/>
+              <rect x="362" y="197" width="15" height="4" rx="2" fill="#01A9DB" opacity="0.4"/>
+              <rect x="387" y="194" width="28" height="10" rx="5" fill="#01A9DB" opacity="0.12" stroke="#01A9DB" stroke-width="0.6" stroke-opacity="0.3"/>
+              <rect x="392" y="197" width="18" height="4" rx="2" fill="#01A9DB" opacity="0.4"/>
+              <rect x="322" y="208" width="32" height="10" rx="5" fill="#01A9DB" opacity="0.12" stroke="#01A9DB" stroke-width="0.6" stroke-opacity="0.3"/>
+              <rect x="327" y="211" width="22" height="4" rx="2" fill="#01A9DB" opacity="0.4"/>
+              <rect x="359" y="208" width="27" height="10" rx="5" fill="#01A9DB" opacity="0.12" stroke="#01A9DB" stroke-width="0.6" stroke-opacity="0.3"/>
+              <rect x="364" y="211" width="17" height="4" rx="2" fill="#01A9DB" opacity="0.4"/>
+              <!-- SECTION: "Education" header -->
+              <rect x="322" y="226" width="44" height="4" rx="2" fill="#01A9DB" opacity="0.35"/>
+              <line x1="370" y1="228" x2="418" y2="228" stroke="#01A9DB" stroke-width="0.6" opacity="0.2"/>
+              <!-- Education line -->
+              <rect x="322" y="236" width="80" height="3" rx="1.5" fill="#94A3B8" opacity="0.4"/>
+              <rect x="322" y="243" width="55" height="2.5" rx="1.2" fill="#94A3B8" opacity="0.3"/>
+              <!-- ATS checkmark badge (bottom-right corner) -->
+              <circle cx="420" cy="248" r="10" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="1.5"/>
+              <path d="M415 248 L418 251 L425 244" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </g>
+
+            <!-- Sparkle particles around polished doc -->
+            <g class="hero-sparkles">
+              <path class="hero-sparkle" d="M448 108 L450.5 115 L458 117.5 L450.5 120 L448 127 L445.5 120 L438 117.5 L445.5 115 Z" fill="#01A9DB" opacity="0.6"/>
+              <path class="hero-sparkle" d="M455 175 L456.5 179 L461 180.5 L456.5 182 L455 186 L453.5 182 L449 180.5 L453.5 179 Z" fill="#FB4100" opacity="0.5"/>
+              <path class="hero-sparkle" d="M318 78 L320 83.5 L326 85.5 L320 87.5 L318 93 L316 87.5 L310 85.5 L316 83.5 Z" fill="#01A9DB" opacity="0.5"/>
+              <path class="hero-sparkle" d="M442 230 L443.5 234 L448 235.5 L443.5 237 L442 241 L440.5 237 L436 235.5 L440.5 234 Z" fill="#10B981" opacity="0.55"/>
+              <path class="hero-sparkle" d="M300 110 L301.5 114 L306 115.5 L301.5 117 L300 121 L298.5 117 L294 115.5 L298.5 114 Z" fill="#FB4100" opacity="0.4"/>
+            </g>
+
+            <!-- Label text beneath docs -->
+            <text x="115" y="290" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="600" fill="#475569" letter-spacing="1.5">YOUR RESUME</text>
+            <text x="370" y="290" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="600" fill="#01A9DB" opacity="0.7" letter-spacing="1.5">ATS-OPTIMISED</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       TRUSTED BY — Logo Belt
+       ═══════════════════════════════════════════════════════════════ -->
+  <section style="padding:32px 0 24px;overflow:hidden;background:#c4cbd4;">
+    <p style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#64748b;margin-bottom:20px;">Trusted by students &amp; professionals from</p>
+    <div style="position:relative;width:100%;">
+      <div class="logo-belt">
+        <div class="logo-belt-track">
+          <div class="logo-belt-item"><span>Razorpay</span><img src="/static/logos/razorpay.png" alt="Razorpay"></div>
+          <div class="logo-belt-item"><span>USC</span><img src="/static/logos/usc.png" alt="USC"></div>
+          <div class="logo-belt-item"><span>NITK Surathkal</span><img src="/static/logos/nitk.png" alt="NITK Surathkal"></div>
+          <div class="logo-belt-item"><span>XLRI</span><img src="/static/logos/xlri.png" alt="XLRI"></div>
+          <div class="logo-belt-item"><span>UMich</span><img src="/static/logos/umich.png" alt="University of Michigan"></div>
+          <div class="logo-belt-item"><span>Arizona State</span><img src="/static/logos/asu.png" alt="Arizona State University"></div>
+          <div class="logo-belt-item"><span>VIT</span><img src="/static/logos/vit.png" alt="VIT"></div>
+          <div class="logo-belt-item"><span>Northeastern</span><img src="/static/logos/neu.png" alt="Northeastern University"></div>
+          <div class="logo-belt-item"><span>BMSCE</span><img src="/static/logos/bmsce.png" alt="BMSCE"></div>
+          <div class="logo-belt-item"><span>SRM IST</span><img src="/static/logos/srm.png" alt="SRM IST"></div>
+          <div class="logo-belt-item"><span>BITS Pilani</span><img src="/static/logos/bits.png" alt="BITS Pilani"></div>
+          <!-- duplicate set for seamless loop -->
+          <div class="logo-belt-item"><span>Razorpay</span><img src="/static/logos/razorpay.png" alt="Razorpay"></div>
+          <div class="logo-belt-item"><span>USC</span><img src="/static/logos/usc.png" alt="USC"></div>
+          <div class="logo-belt-item"><span>NITK Surathkal</span><img src="/static/logos/nitk.png" alt="NITK Surathkal"></div>
+          <div class="logo-belt-item"><span>XLRI</span><img src="/static/logos/xlri.png" alt="XLRI"></div>
+          <div class="logo-belt-item"><span>UMich</span><img src="/static/logos/umich.png" alt="University of Michigan"></div>
+          <div class="logo-belt-item"><span>Arizona State</span><img src="/static/logos/asu.png" alt="Arizona State University"></div>
+          <div class="logo-belt-item"><span>VIT</span><img src="/static/logos/vit.png" alt="VIT"></div>
+          <div class="logo-belt-item"><span>Northeastern</span><img src="/static/logos/neu.png" alt="Northeastern University"></div>
+          <div class="logo-belt-item"><span>BMSCE</span><img src="/static/logos/bmsce.png" alt="BMSCE"></div>
+          <div class="logo-belt-item"><span>SRM IST</span><img src="/static/logos/srm.png" alt="SRM IST"></div>
+          <div class="logo-belt-item"><span>BITS Pilani</span><img src="/static/logos/bits.png" alt="BITS Pilani"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       HOW IT WORKS
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="how-it-works">
+    <div class="container">
+      <div class="section-label reveal">How It Works</div>
+      <h2 class="section-title reveal reveal-delay-1">Three steps to your<br>perfect resume</h2>
+      <p class="section-subtitle reveal reveal-delay-2">
+        No templates. No guesswork. Just AI that understands what each employer is looking for.
+      </p>
+
+      <div class="steps-grid">
+        <div class="step-card reveal">
+          <span class="step-number">01</span>
+          <div class="step-icon upload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#FB4100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <h3 class="step-title">Upload Your Resume</h3>
+          <p class="step-desc">
+            Upload your existing PDF resume. Our AI reads and structures every detail
+            (experience, skills, education, projects) into a rich profile you can reuse.
+          </p>
+        </div>
+
+        <div class="step-card reveal reveal-delay-1">
+          <span class="step-number">02</span>
+          <div class="step-icon ai">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#01A9DB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a4 4 0 0 0-4 4c0 2 1 3 2 4l-5 8h14l-5-8c1-1 2-2 2-4a4 4 0 0 0-4-4z"/>
+              <path d="M8 18l-2 4"/><path d="M16 18l2 4"/>
+            </svg>
+          </div>
+          <h3 class="step-title">Paste the Job Description</h3>
+          <p class="step-desc">
+            Paste the role, company, and job description. Our AI analyses the requirements
+            and tailors your resume by rewriting bullet points, reordering sections,
+            and highlighting relevant skills.
+          </p>
+        </div>
+
+        <div class="step-card reveal reveal-delay-2">
+          <span class="step-number">03</span>
+          <div class="step-icon pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>
+            </svg>
+          </div>
+          <h3 class="step-title">Download Your PDF</h3>
+          <p class="step-desc">
+            Get a professionally typeset PDF resume compiled with LaTeX, the same system
+            used for academic papers and technical documents. Clean, consistent, ATS-friendly.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ATS BOT
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="ats-bot">
+    <div class="container">
+      <div class="section-label reveal">ATS Bot</div>
+      <h2 class="section-title reveal reveal-delay-1">Your AI resume agent,<br><span class="serif" style="background:linear-gradient(135deg,var(--orange),#fb923c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">built right in</span></h2>
+      <p class="section-subtitle reveal reveal-delay-2">
+        Not just a generator. ATS Bot is an AI agent that reads, analyses, and edits your resume through natural conversation. Tell it what to change and watch it happen live.
+      </p>
+
+      <div class="atsbot-layout">
+        <!-- Left: capabilities -->
+        <div class="atsbot-capabilities">
+          <div class="atsbot-cap reveal">
+            <div class="atsbot-cap-icon" style="background:rgba(251,65,0,0.1);border:1px solid rgba(251,65,0,0.2);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="atsbot-cap-title">Live Editing</div>
+              <div class="atsbot-cap-desc">
+                Say "rewrite my first experience" or "add Kubernetes to skills" and the bot edits your resume in real time. Changes appear instantly, no page reload.
+              </div>
+            </div>
+          </div>
+
+          <div class="atsbot-cap reveal reveal-delay-1">
+            <div class="atsbot-cap-icon" style="background:rgba(1,169,219,0.1);border:1px solid rgba(1,169,219,0.2);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+            </div>
+            <div>
+              <div class="atsbot-cap-title">JD-Aware Analysis</div>
+              <div class="atsbot-cap-desc">
+                The bot has full context of both your profile and the job description. It identifies gaps, suggests improvements, and reorders sections to match what the employer is looking for.
+              </div>
+            </div>
+          </div>
+
+          <div class="atsbot-cap reveal reveal-delay-2">
+            <div class="atsbot-cap-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="atsbot-cap-title">Tool-Powered Actions</div>
+              <div class="atsbot-cap-desc">
+                Not just text responses. The bot uses tools to read your resume, apply structured edits, reorder projects, and trigger PDF recompiles automatically.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: mock chat window -->
+        <div class="atsbot-mock reveal">
+          <div class="atsbot-mock-header">
+            <div class="atsbot-mock-dot"></div>
+            <div class="atsbot-mock-label">ATS BOT</div>
+          </div>
+          <div class="atsbot-mock-body">
+            <div class="atsbot-mock-msg user">
+              Move my most relevant project to the top
+            </div>
+            <div class="atsbot-mock-tool">
+              <span class="mock-dot"></span> Reading resume...
+            </div>
+            <div class="atsbot-mock-tool">
+              <span class="mock-dot"></span> Reordering projects...
+            </div>
+            <div class="atsbot-mock-msg bot">
+              Done. I moved <strong>Distributed Trading Engine</strong> to the top of your projects section since it directly demonstrates the high-concurrency and low-latency skills this role requires. Your PDF is recompiling now.
+            </div>
+            <div class="atsbot-mock-msg user">
+              Which parts of my resume are weakest for this job?
+            </div>
+            <div class="atsbot-mock-tool">
+              <span class="mock-dot"></span> Analysing resume against JD...
+            </div>
+            <div class="atsbot-mock-msg bot">
+              Your <strong>cloud orchestration</strong> experience is thin. The JD emphasises Kubernetes and autoscaling, but your resume only mentions Docker. I'd recommend expanding your infrastructure bullet points.
+            </div>
+          </div>
+          <div class="atsbot-mock-input">
+            <div class="atsbot-mock-inputbox">Ask about your resume...</div>
+            <div class="atsbot-mock-send">Send</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       FEATURES
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-label reveal">Features</div>
+      <h2 class="section-title reveal reveal-delay-1">Built for job seekers<br>who mean business</h2>
+      <p class="section-subtitle reveal reveal-delay-2">
+        Every feature exists to get you past the ATS and into the interview room.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.22 4.22l2.83 2.83m9.9 9.9 2.83 2.83M1 12h4m14 0h4M4.22 19.78l2.83-2.83m9.9-9.9 2.83-2.83"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">AI-Powered Tailoring</h3>
+          <p class="feature-desc">
+            Powered by Google's Gemini models. Every resume is uniquely tailored to match the
+            specific job description, not just keyword-stuffed.
+          </p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">LaTeX Typesetting</h3>
+          <p class="feature-desc">
+            Your resume is compiled with pdfLaTeX into a pixel-perfect PDF. Professional
+            formatting that stands out without being flashy.
+          </p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Review Before Download</h3>
+          <p class="feature-desc">
+            Preview and edit the AI-generated content before the final PDF is compiled.
+            You stay in control of every word.
+          </p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              <path d="M22 2 13 11"/><path d="m16 2 6 0 0 6"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">ATS Optimised</h3>
+          <p class="feature-desc">
+            Clean, parseable formatting that Applicant Tracking Systems love. No images,
+            no tables, no fancy layouts that confuse the bots.
+          </p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">One Profile, Many Resumes</h3>
+          <p class="feature-desc">
+            Upload once, generate unlimited tailored resumes. Your master profile stores
+            everything. Each job gets a custom version.
+          </p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon" style="background: rgba(251,65,0,0.06); border-color: rgba(251,65,0,0.12);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Resume Roast</h3>
+          <p class="feature-desc">
+            Get a brutally honest, AI-powered roast of your resume. Our AI examines
+            your formatting, content, and layout, then gives you real feedback with a score,
+            wrapped in sharp humour. Free with every upload.
+          </p>
+        </div>
+
+        <div class="feature-card reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+              <path d="m9 12 2 2 4-4"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Secure &amp; Private</h3>
+          <p class="feature-desc">
+            Your data is encrypted and never shared. Resume content is processed on-demand
+            and not used for model training.
+          </p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Multi-Tenant Ready</h3>
+          <p class="feature-desc">
+            Organisations can onboard their teams with automatic domain-based assignment.
+            Admins get a full dashboard to manage users, credits, and promo codes.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       PRICING
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="pricing">
+    <div class="container">
+      <div class="section-label reveal">Pricing</div>
+      <h2 class="section-title reveal reveal-delay-1">Simple, transparent<br>pricing</h2>
+      <p class="section-subtitle reveal reveal-delay-2">
+        Start free. Buy credits when you need more. One credit = one tailored resume.
+      </p>
+
+      <div class="pricing-cards">
+        <div class="price-card reveal">
+          <div class="price-name">Day Pass</div>
+          <div class="price-amount"><span class="currency">₹</span>49</div>
+          <div class="price-per">10 credits · ₹4.90 per resume</div>
+          <ul class="price-features">
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              10 tailored resumes
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              Credits never expire
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              Stacks with 3 daily free
+            </li>
+          </ul>
+          <a href="/#/login" class="btn-price secondary">Get Started</a>
+        </div>
+
+        <div class="price-card featured reveal reveal-delay-1">
+          <div class="price-badge">Most Popular</div>
+          <div class="price-name">Sprint</div>
+          <div class="price-amount"><span class="currency">₹</span>99</div>
+          <div class="price-per">30 credits · ₹3.30 per resume</div>
+          <ul class="price-features">
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              30 tailored resumes
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              Credits never expire
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              33% cheaper per credit
+            </li>
+          </ul>
+          <a href="/#/login" class="btn-price primary">Buy Sprint</a>
+        </div>
+
+        <div class="price-card reveal reveal-delay-2">
+          <div class="price-badge" style="background: linear-gradient(135deg, var(--teal), #0891b2);">Best Value</div>
+          <div class="price-name">Job Hunt</div>
+          <div class="price-amount"><span class="currency">₹</span>199</div>
+          <div class="price-per">75 credits · ₹2.65 per resume</div>
+          <ul class="price-features">
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              75 tailored resumes
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              Credits never expire
+            </li>
+            <li>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              46% cheaper per credit
+            </li>
+          </ul>
+          <a href="/#/login" class="btn-price secondary">Buy Job Hunt</a>
+        </div>
+      </div>
+
+      <div class="price-free-banner reveal">
+        <p>
+          <strong>No credit card required to start.</strong>
+          Sign up with Google and get 3 free tailored resumes every day. No strings attached.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       FAQ
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="faq">
+    <div class="container">
+      <div class="section-label reveal">FAQ</div>
+      <h2 class="section-title reveal reveal-delay-1">Common questions</h2>
+
+      <div class="faq-list">
+        <div class="faq-item reveal">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is a credit?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            One credit = one tailored resume. When you generate a resume for a specific job description,
+            one credit is consumed. If generation fails for any reason, your credit is automatically refunded.
+          </div></div>
+        </div>
+
+        <div class="faq-item reveal reveal-delay-1">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            How does the daily free quota work?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Every user gets 3 free resume generations per day, which reset at midnight UTC.
+            These are used first. Purchased credits are only consumed after your daily free quota is exhausted.
+          </div></div>
+        </div>
+
+        <div class="faq-item reveal">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            Do purchased credits expire?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            No. Purchased credits stay in your account until you use them. There is no expiration date.
+          </div></div>
+        </div>
+
+        <div class="faq-item reveal reveal-delay-1">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What payment methods do you accept?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            We use Razorpay for payments, which supports UPI, credit/debit cards (Visa, Mastercard, RuPay),
+            net banking, and popular wallets. All transactions are processed in Indian Rupees (INR).
+          </div></div>
+        </div>
+
+        <div class="faq-item reveal reveal-delay-1">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            What is Resume Roast?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Resume Roast is a free feature that gives you brutally honest, AI-powered feedback on your resume.
+            Upload your PDF and our AI examines the actual formatting, layout, and content, then delivers
+            a roast with a score out of 10, a one-liner verdict, and detailed category breakdowns covering
+            formatting, content quality, impact, and ATS readiness. It's honest feedback disguised as entertainment.
+          </div></div>
+        </div>
+
+        <div class="faq-item reveal">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            Is my data safe?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">
+            Your resume data is stored securely and is never shared with third parties. We use Google OAuth
+            for authentication (we never store your Google password) and all data is transmitted over HTTPS.
+            Resume content is processed on-demand and is not used for training AI models.
+          </div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       CTA BAND
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="cta-band">
+    <div class="container">
+      <h2 class="cta-title reveal">Ready to land your next interview?</h2>
+      <p class="cta-desc reveal reveal-delay-1">
+        Start with 3 free tailored resumes today. No credit card needed.
+      </p>
+      <a href="/#/login" class="btn-hero reveal reveal-delay-2">
+        Create Your Free Account
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ENTERPRISE
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="enterprise">
+    <div class="container">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;">
+        <div>
+          <div class="section-label reveal">Enterprise</div>
+          <h2 class="section-title reveal reveal-delay-1">Need ATS Beater<br>for your team?</h2>
+          <p class="section-subtitle reveal reveal-delay-2" style="margin-bottom: 32px;">
+            We offer dedicated tenant setups for organisations: placement cells, recruitment agencies,
+            career coaching firms, and HR teams. Get your own workspace with full admin controls.
+          </p>
+          <a href="mailto:linkedin.com/in/yashptel?subject=Enterprise%20Enquiry%20-%20ATS%20Beater" class="btn-hero reveal reveal-delay-3" style="display: inline-flex;">
+            Contact Sales
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="reveal" style="background: rgba(22,43,69,0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span style="font-weight: 700; font-size: 15px;">Multi-Tenant Workspaces</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">Dedicated tenant with automatic email-domain assignment. Your team members are grouped under your org on signup.</p>
+          </div>
+          <div class="reveal reveal-delay-1" style="background: rgba(22,43,69,0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span style="font-weight: 700; font-size: 15px;">Custom Promo Codes</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">Distribute branded promo codes to your team. Grant credits or activate time passes in bulk.</p>
+          </div>
+          <div class="reveal reveal-delay-2" style="background: rgba(22,43,69,0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              <span style="font-weight: 700; font-size: 15px;">Admin Dashboard</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">Full admin panel to manage users, credit packs, time passes, transactions, and domain rules for your organisation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       CONTACT
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="section" id="contact">
+    <div class="container">
+      <div class="section-label reveal">Contact Us</div>
+      <h2 class="section-title reveal reveal-delay-1">Get in touch</h2>
+      <p class="section-subtitle reveal reveal-delay-2">
+        Questions, feedback, or partnership enquiries? We'd love to hear from you.
+      </p>
+
+      <div class="contact-grid">
+        <div class="contact-card reveal">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+          </div>
+          <div class="contact-label">Email</div>
+          <div class="contact-value">
+            <a href="mailto:linkedin.com/in/yashptel">linkedin.com/in/yashptel</a>
+          </div>
+        </div>
+
+        <div class="contact-card reveal reveal-delay-1">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+          <div class="contact-label">Address</div>
+          <div class="contact-value">
+            Yash Patel<br>
+            Mangaluru, Karnataka<br>
+            India
+          </div>
+        </div>
+
+        <div class="contact-card reveal reveal-delay-2">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <div class="contact-label">Support Hours</div>
+          <div class="contact-value">
+            Monday to Friday<br>
+            10:00 AM to 6:00 PM IST
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       TERMS & CONDITIONS
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="legal-section" id="terms">
+    <div class="container">
+      <div class="legal-content">
+        <h2 class="legal-title">Terms &amp; Conditions</h2>
+        <p class="legal-date">Last updated: February 2026</p>
+
+        <p>
+          Welcome to ATS Beater ("Service"), operated by Yash Patel ("Company", "we", "us").
+          By accessing or using the Service, you agree to be bound by these terms.
+        </p>
+
+        <h3>1. Service Description</h3>
+        <p>
+          ATS Beater is an AI-powered resume tailoring service. Users upload their resume, provide
+          a job description, and the Service generates an ATS-optimised resume in PDF format. The
+          Service uses artificial intelligence models and LaTeX compilation to produce output.
+        </p>
+
+        <h3>2. User Accounts</h3>
+        <p>
+          You must sign in using Google OAuth to use the Service. You are responsible for maintaining
+          the security of your account. You must provide accurate information and must not create
+          accounts for fraudulent purposes.
+        </p>
+
+        <h3>3. Credits &amp; Payments</h3>
+        <ul>
+          <li>Each user receives 3 free resume generation credits per day, resetting at midnight UTC.</li>
+          <li>Additional credits can be purchased through our in-app payment system powered by Razorpay.</li>
+          <li>Purchased credits do not expire and are non-transferable between accounts.</li>
+          <li>All prices are listed in Indian Rupees (INR) and include applicable taxes.</li>
+          <li>If a resume generation fails after credit deduction, the credit is automatically refunded to your account.</li>
+        </ul>
+
+        <h3>4. Acceptable Use</h3>
+        <p>You agree not to:</p>
+        <ul>
+          <li>Use the Service to generate misleading or fraudulent content</li>
+          <li>Upload content that infringes on intellectual property rights</li>
+          <li>Attempt to reverse-engineer, scrape, or abuse the Service</li>
+          <li>Share your account credentials with others</li>
+          <li>Use automated tools to access the Service without permission</li>
+        </ul>
+
+        <h3>5. Intellectual Property</h3>
+        <p>
+          You retain ownership of the content you upload. The AI-generated resume output is provided
+          for your personal use. The Service's software, design, and branding are owned by Yash Patel.
+        </p>
+
+        <h3>6. Disclaimer of Warranties</h3>
+        <p>
+          The Service is provided "as is" without warranties of any kind. We do not guarantee that
+          AI-generated resumes will result in job interviews or employment. The quality of output
+          depends on the input provided.
+        </p>
+
+        <h3>7. Limitation of Liability</h3>
+        <p>
+          To the maximum extent permitted by law, Yash Patel shall not be liable for any indirect,
+          incidental, or consequential damages arising from your use of the Service. Our total
+          liability is limited to the amount you paid for credits in the preceding 12 months.
+        </p>
+
+        <h3>8. Modifications</h3>
+        <p>
+          We reserve the right to modify these terms at any time. Continued use of the Service
+          after changes constitutes acceptance. Material changes will be communicated via email
+          or in-app notification.
+        </p>
+
+        <h3>9. Governing Law</h3>
+        <p>
+          These terms are governed by the laws of India. Any disputes shall be subject to the
+          exclusive jurisdiction of the courts in Mangaluru, Karnataka.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       PRIVACY POLICY
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="legal-section" id="privacy">
+    <div class="container">
+      <div class="legal-content">
+        <h2 class="legal-title">Privacy Policy</h2>
+        <p class="legal-date">Last updated: February 2026</p>
+
+        <p>
+          Yash Patel ("we", "us") operates ATS Beater. This policy explains how we collect,
+          use, and protect your personal information.
+        </p>
+
+        <h3>1. Information We Collect</h3>
+        <ul>
+          <li><strong>Account information:</strong> Name, email address, and profile picture from Google OAuth. We do not store your Google password.</li>
+          <li><strong>Resume data:</strong> The PDF resume you upload and the structured data extracted from it.</li>
+          <li><strong>Job descriptions:</strong> The job descriptions you provide for resume tailoring.</li>
+          <li><strong>Generated content:</strong> AI-generated resume content and compiled PDFs.</li>
+          <li><strong>Payment information:</strong> Transaction records (order IDs, amounts). Card details are handled entirely by Razorpay and never stored on our servers.</li>
+          <li><strong>Usage data:</strong> Credit transactions, generation history, and feature usage.</li>
+        </ul>
+
+        <h3>2. How We Use Your Information</h3>
+        <ul>
+          <li>To provide the resume tailoring service</li>
+          <li>To process credit purchases and maintain transaction records</li>
+          <li>To improve the quality and reliability of the Service</li>
+          <li>To communicate service updates and changes</li>
+          <li>To prevent fraud and abuse</li>
+        </ul>
+
+        <h3>3. Data Sharing</h3>
+        <p>We do not sell your personal data. We share information only with:</p>
+        <ul>
+          <li><strong>Google Cloud:</strong> For AI processing (Gemini API). Resume content is processed on-demand and is not used for model training.</li>
+          <li><strong>Razorpay:</strong> For payment processing. Only order and transaction details are shared.</li>
+          <li><strong>Law enforcement:</strong> When required by law or valid legal process.</li>
+        </ul>
+
+        <h3>4. Data Storage &amp; Security</h3>
+        <p>
+          Your data is stored on secure servers with encryption at rest and in transit.
+          We implement industry-standard security measures including access controls,
+          regular security audits, and secure development practices.
+        </p>
+
+        <h3>5. Data Retention</h3>
+        <p>
+          Account data is retained as long as your account is active. You can request deletion
+          of your account and associated data by contacting us at
+          <a href="mailto:linkedin.com/in/yashptel" style="color: var(--teal);">linkedin.com/in/yashptel</a>.
+          Transaction records may be retained for up to 7 years for compliance with Indian tax laws.
+        </p>
+
+        <h3>6. Your Rights</h3>
+        <p>You have the right to:</p>
+        <ul>
+          <li>Access your personal data</li>
+          <li>Request correction of inaccurate data</li>
+          <li>Request deletion of your data (subject to legal requirements)</li>
+          <li>Withdraw consent for data processing</li>
+        </ul>
+
+        <h3>7. Cookies</h3>
+        <p>
+          We use a JWT authentication token stored in your browser's local storage.
+          We do not use third-party tracking cookies.
+        </p>
+
+        <h3>8. Changes to This Policy</h3>
+        <p>
+          We may update this policy from time to time. Material changes will be communicated
+          via email or in-app notification.
+        </p>
+
+        <h3>9. Contact</h3>
+        <p>
+          For privacy-related queries, contact us at
+          <a href="mailto:linkedin.com/in/yashptel" style="color: var(--teal);">linkedin.com/in/yashptel</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       REFUND POLICY
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="legal-section" id="refund">
+    <div class="container">
+      <div class="legal-content">
+        <h2 class="legal-title">Refund &amp; Cancellation Policy</h2>
+        <p class="legal-date">Last updated: February 2026</p>
+
+        <h3>1. Automatic Refunds</h3>
+        <p>
+          If a resume generation fails after a credit has been deducted (due to a system error,
+          AI processing failure, or PDF compilation issue), the credit is <strong>automatically
+          refunded</strong> to your account. No action is required from your end.
+        </p>
+
+        <h3>2. Credit Pack Purchases</h3>
+        <ul>
+          <li>Credit purchases are <strong>non-refundable</strong> once the payment is confirmed and credits have been added to your account.</li>
+          <li>If credits were not added despite a successful payment (payment processing error), contact us with your Razorpay order ID and we will resolve the issue within 3 business days.</li>
+        </ul>
+
+        <h3>3. Duplicate Payments</h3>
+        <p>
+          If you are charged twice for the same purchase, contact us at
+          <a href="mailto:linkedin.com/in/yashptel" style="color: var(--teal);">linkedin.com/in/yashptel</a>
+          with the transaction details. We will process a refund for the duplicate charge within
+          5 to 7 business days.
+        </p>
+
+        <h3>4. No Cancellation</h3>
+        <p>
+          Since credits are delivered instantly and do not expire, there is no subscription to cancel.
+          You may stop using the Service at any time. Unused credits remain in your account.
+        </p>
+
+        <h3>5. Refund Processing</h3>
+        <p>
+          Where a monetary refund is applicable, it will be processed to the original payment method
+          via Razorpay. Refunds typically take 5 to 7 business days to reflect in your account, depending
+          on your bank.
+        </p>
+
+        <h3>6. Contact for Refund Requests</h3>
+        <p>
+          For any refund-related queries, email us at
+          <a href="mailto:linkedin.com/in/yashptel" style="color: var(--teal);">linkedin.com/in/yashptel</a>
+          with the subject line "Refund Request" and include your registered email, Razorpay order ID,
+          and a description of the issue.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="#" class="nav-brand">
+            <div class="nav-brand-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FB4100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35"/>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+                <path d="M16 14a2 2 0 0 0-2 2"/><path d="M16 22a2 2 0 0 1-2-2"/>
+                <path d="M20 14a2 2 0 0 1 2 2"/><path d="M20 22a2 2 0 0 0 2-2"/>
+              </svg>
+            </div>
+            ATS Beater
+          </a>
+          <p>AI-powered resume tailoring for job seekers. Built by Yash Patel in Bengaluru, India.</p>
+        </div>
+
+        <div class="footer-links">
+          <div class="footer-col">
+            <div class="footer-col-title">Product</div>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#features">Features</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
+            <a href="#enterprise">Enterprise</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Legal</div>
+            <a href="#terms">Terms &amp; Conditions</a>
+            <a href="#privacy">Privacy Policy</a>
+            <a href="#refund">Refund Policy</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Company</div>
+            <a href="#contact">Contact</a>
+            <a href="mailto:linkedin.com/in/yashptel">Support</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span class="footer-copy">&copy; 2026 Yash Patel. All rights reserved.</span>
+        <div class="footer-legal">
+          <a href="#terms">Terms</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#refund">Refunds</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCRIPTS
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    // ── Navbar scroll effect ────────────────────────────────────
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 40);
+    }, { passive: true });
+
+    // ── Mobile menu toggle ──────────────────────────────────────
+    const mobileToggle = document.getElementById('mobileToggle');
+    const navLinks = document.getElementById('navLinks');
+    mobileToggle.addEventListener('click', () => {
+      mobileToggle.classList.toggle('open');
+      navLinks.classList.toggle('open');
+    });
+    // Close mobile menu on link click
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        mobileToggle.classList.remove('open');
+        navLinks.classList.remove('open');
+      });
+    });
+
+    // ── FAQ accordion ───────────────────────────────────────────
+    function toggleFaq(btn) {
+      const item = btn.closest('.faq-item');
+      const wasOpen = item.classList.contains('open');
+      // Close all
+      document.querySelectorAll('.faq-item.open').forEach(el => el.classList.remove('open'));
+      // Toggle clicked
+      if (!wasOpen) item.classList.add('open');
+    }
+
+    // ── Scroll reveal ───────────────────────────────────────────
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    reveals.forEach(el => observer.observe(el));
+
+    // ── Smooth scroll for anchor links ──────────────────────────
+    document.querySelectorAll('a[href^="#"]:not([href="#"])').forEach(link => {
+      link.addEventListener('click', (e) => {
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

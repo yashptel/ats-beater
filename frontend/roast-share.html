@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{OG_TITLE}} — ATS Beater</title>
+
+<!-- OG / Social previews -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{OG_TITLE}}">
+<meta property="og:description" content="{{OG_DESCRIPTION}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:url" content="{{OG_URL}}">
+<meta property="og:site_name" content="ATS Beater">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{OG_TITLE}}">
+<meta name="twitter:description" content="{{OG_DESCRIPTION}}">
+<meta name="twitter:image" content="{{OG_IMAGE}}">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0F1B2E;
+  --bg-card: #162B45;
+  --border: rgba(1,169,219,0.14);
+  --orange: #FB4100;
+  --teal: #01A9DB;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-dim: #64748B;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+.container { max-width: 640px; margin: 0 auto; padding: 24px 16px 120px; }
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 32px 0 24px;
+}
+.brand {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.brand-link { color: var(--text-dim); text-decoration: none; }
+.brand-link:hover { color: var(--text-secondary); }
+.subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+
+/* Hero score */
+.hero-score {
+  text-align: center;
+  padding: 40px 20px 32px;
+  margin-bottom: 16px;
+}
+.hero-score-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 96px;
+  line-height: 1;
+  letter-spacing: -4px;
+}
+.hero-score-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  margin-bottom: 16px;
+}
+.hero-score-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.hero-headline {
+  font-weight: 700;
+  font-size: 22px;
+  color: #fff;
+  line-height: 1.4;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Cards */
+.card {
+  background: rgba(22,43,69,0.8);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-accent-teal { border-left: 3px solid var(--teal); }
+
+/* Section label */
+.section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+/* Roast points */
+.point {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 8px;
+}
+.point:last-child { margin-bottom: 0; }
+.point-emoji { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.point-text { font-size: 14px; color: #fff; line-height: 1.6; }
+
+/* Feedback */
+.feedback { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+
+/* Verdict */
+.verdict-card { text-align: center; padding: 28px 20px; }
+.verdict-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.verdict-text { font-weight: 700; font-size: 18px; color: #fff; }
+
+
+.cta-full {
+  display: block;
+  width: 100%;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #FB4100, rgba(251,65,0,0.7));
+  color: var(--bg-deep);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.cta-full:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(251,65,0,0.3); }
+
+.cta-subtext {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+
+/* Bottom CTA section */
+.bottom-cta {
+  margin-top: 32px;
+  text-align: center;
+}
+
+/* Sticky mobile CTA */
+.sticky-cta {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  background: rgba(10,15,30,0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  z-index: 100;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+.sticky-cta.visible { transform: translateY(0); }
+.sticky-cta-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.sticky-cta-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #FB4100, rgba(251,65,0,0.7));
+  color: var(--bg-deep);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sticky-cta-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+.sticky-cta-close:hover { color: var(--text-secondary); border-color: rgba(255,255,255,0.2); }
+
+@media (max-width: 767px) {
+  .sticky-cta { display: block; }
+  .hero-score-number { font-size: 72px; letter-spacing: -3px; }
+  .hero-score-ring { width: 112px; height: 112px; }
+  .hero-headline { font-size: 18px; }
+}
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 16px;
+}
+.tab-btn {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.tab-btn.active {
+  color: #FB4100;
+  border-bottom-color: #FB4100;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 32px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="brand"><a href="{{BASE_URL}}" class="brand-link">ATS BEATER</a></div>
+    <div class="subtitle">Resume Roast</div>
+  </div>
+
+  <!-- Content rendered by JS from embedded data -->
+  <div id="roast-app"></div>
+
+  <!-- Bottom CTA -->
+  <div class="bottom-cta" id="bottom-cta">
+    <a href="{{BASE_URL}}/#/roast" class="cta-full">
+      Get Your Resume Roasted
+    </a>
+    <p class="cta-subtext">Free &middot; Brutally honest &middot; 30 seconds</p>
+  </div>
+
+  <div class="footer">Powered by ATS Beater — AI Resume Tools</div>
+</div>
+
+<!-- Sticky mobile CTA -->
+<div class="sticky-cta" id="sticky-cta">
+  <div class="sticky-cta-inner">
+    <a href="{{BASE_URL}}/#/roast" class="sticky-cta-btn">Roast My Resume — Free</a>
+    <button class="sticky-cta-close" id="sticky-close" aria-label="Dismiss">&times;</button>
+  </div>
+</div>
+
+<script>
+const ROAST = {{ROAST_JSON}};
+const CTA_URL = '{{BASE_URL}}/#/roast';
+
+function scoreColor(score, alpha) {
+  if (score >= 8) return alpha ? `rgba(34,197,94,${alpha})` : '#22c55e';
+  if (score >= 5) return alpha ? `rgba(251,191,36,${alpha})` : '#fbbf24';
+  return alpha ? `rgba(239,68,68,${alpha})` : '#ef4444';
+}
+function scoreLabel(score) {
+  if (score >= 9) return 'EXCEPTIONAL';
+  if (score >= 7) return 'SOLID';
+  if (score >= 5) return 'MEDIOCRE';
+  if (score >= 3) return 'ROUGH';
+  return 'DUMPSTER FIRE';
+}
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+function atsGradientColor(ratio) {
+  const hue = Math.round(ratio * 142);
+  const sat = ratio < 0.5 ? 80 : 70;
+  const lum = ratio < 0.5 ? 50 : Math.round(45 + ratio * 10);
+  return { color: `hsl(${hue}, ${sat}%, ${lum}%)`, bg: `hsla(${hue}, ${sat}%, ${lum}%, 0.12)` };
+}
+const ATS_DESCRIPTIONS = {
+  'machine readability': 'ATS software can extract text cleanly from your PDF without garbled characters or missing sections.',
+  'standard section headers': 'Uses recognizable headers like Experience, Education, Skills that ATS parsers expect.',
+  'single-column layout': 'Clean single-column format that won\u2019t break when parsed by automated systems.',
+  'single column layout': 'Clean single-column format that won\u2019t break when parsed by automated systems.',
+  'contact info in body': 'Name, email, and phone are in the main body where ATS can find them, not hidden in headers/footers.',
+  'contact information': 'Name, email, and phone are in the main body where ATS can find them, not hidden in headers/footers.',
+  'no graphics dependency': 'All critical info is in parseable text \u2014 no icons, charts, or text baked into images.',
+  'avoids tables/graphics': 'All critical info is in parseable text \u2014 no icons, charts, or text baked into images.',
+  'skills section': 'Dedicated skills section listing technical and relevant skills for ATS keyword matching.',
+  'keyword optimization': 'Key skills and technologies are explicitly listed for ATS keyword matching.',
+  'consistent date formatting': 'Dates use the same format throughout, making them parseable by automated systems.',
+  'consistent date formats': 'Dates use the same format throughout, making them parseable by automated systems.',
+  'quantified achievements': 'Bullet points include numbers and metrics that demonstrate measurable impact.',
+  'action verbs': 'Bullet points lead with strong action verbs that convey impact and ownership.',
+  'education relevance': 'Education section is present with degree, institution, and relevant details.',
+};
+function getAtsDescription(label) { return ATS_DESCRIPTIONS[label.toLowerCase()] || null; }
+
+const rd = ROAST.roast_data;
+if (rd) {
+  const c = scoreColor(rd.score);
+  const bg = scoreColor(rd.score, 0.12);
+  const glow = scoreColor(rd.score, 0.15);
+  let html = '';
+
+  // 1. Hero score — always visible above tabs
+  html += `<div class="hero-score">
+    <div class="hero-score-ring" style="background:${bg}; box-shadow:0 0 60px ${glow};">
+      <span class="hero-score-number" style="color:${c}">${rd.score}</span>
+    </div>
+    <p class="hero-score-label" style="color:${c}">${scoreLabel(rd.score)}</p>
+    <p class="hero-headline">${esc(rd.headline)}</p>
+  </div>`;
+
+  // 2. Tab bar
+  html += `<div class="tab-bar">
+    <button class="tab-btn active" data-tab="roast" onclick="switchTab('roast')">ROAST</button>
+    <button class="tab-btn" data-tab="check" onclick="switchTab('check')">REALITY CHECK</button>
+  </div>`;
+
+  // 3. ROAST tab content
+  html += `<div id="tab-roast">`;
+
+  // Roast points
+  html += `<div class="card"><div class="section-label">THE ROAST</div>`;
+  for (const p of rd.roast_points) {
+    html += `<div class="point">
+      <span class="point-emoji">${esc(p.emoji)}</span>
+      <span class="point-text">${esc(p.text)}</span>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // Actual feedback
+  html += `<div class="card card-accent-teal">
+    <div class="section-label" style="color:var(--teal)">ACTUAL FEEDBACK</div>
+    <p class="feedback">${esc(rd.actual_feedback)}</p>
+  </div>`;
+
+  // Verdict
+  html += `<div class="card verdict-card">
+    <p class="verdict-label">THE VERDICT</p>
+    <p class="verdict-text">${esc(rd.verdict)}</p>
+  </div>`;
+
+  html += `</div>`; // end tab-roast
+
+  // 4. REALITY CHECK tab content (hidden by default)
+  html += `<div id="tab-check" style="display:none;">`;
+
+  // ATS Readiness Checklist
+  if (rd.ats_checklist && rd.ats_checklist.length > 0) {
+    const passedArr = rd.ats_checklist.filter(c => c.passed);
+    const total = rd.ats_checklist.length;
+    const passedCount = passedArr.length;
+    const pct = Math.round(passedCount / total * 100);
+    const ratio = passedCount / total;
+    const grad = atsGradientColor(ratio);
+
+    // Score header with progress bar
+    html += `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <span class="section-label" style="margin-bottom:0">ATS Readiness</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:2px;color:${grad.color};background:${grad.bg};padding:4px 10px;border-radius:4px;">${passedCount}/${total} CRITERIA MET</span>
+      </div>
+      <div style="width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,0.06);overflow:hidden;">
+        <div style="height:100%;border-radius:99px;width:${pct}%;background:${grad.color};transition:width 0.5s;"></div>
+      </div>
+    </div>`;
+
+    // Individual check items — unified card list
+    for (const check of rd.ats_checklist) {
+      const borderColor = check.passed ? '#22c55e' : '#fbbf24';
+      const dotBg = check.passed ? 'rgba(34,197,94,0.15)' : 'rgba(251,191,36,0.15)';
+      const dotColor = check.passed ? '#22c55e' : '#fbbf24';
+      const icon = check.passed ? '&#x2713;' : '!';
+      const desc = check.passed ? getAtsDescription(check.label) : null;
+      html += `<div class="card" style="border-left:3px solid ${borderColor};padding:14px 16px;display:flex;align-items:flex-start;gap:12px;">
+        <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;background:${dotBg};">
+          <span style="font-size:12px;font-weight:700;color:${dotColor};">${icon}</span>
+        </div>
+        <div style="min-width:0;flex:1;">
+          <p style="color:#fff;font-size:14px;font-weight:600;">${esc(check.label)}</p>
+          ${!check.passed && check.detail ? `<p style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.5;">${esc(check.detail)}</p>` : ''}
+          ${desc ? `<p style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.5;">${esc(desc)}</p>` : ''}
+        </div>
+      </div>`;
+    }
+
+    // Educational note
+    html += `<div style="margin-top:8px;padding:16px;border-radius:12px;background:rgba(1,169,219,0.06);border:1px solid rgba(1,169,219,0.1);">
+      <p style="font-size:12px;color:var(--teal);line-height:1.6;"><span style="font-weight:600;">There's no such thing as an "ATS score."</span> ATS software doesn't rate your resume out of 100 — that number you see on other sites is made up. What actually happens is simple: the system checks if your resume meets basic formatting criteria (that's what we show above) and then pattern-matches your content against the job description's keywords, skills, and qualifications. It's pass or fail, not a score.</p>
+      <p style="font-size:12px;color:var(--teal);line-height:1.6;margin-top:8px;">The formatting checks above are real and useful — but they're only half the battle. The other half is keyword alignment with a specific role. That's exactly what our resume tailoring does: it restructures your resume to match a real job description, so you actually get past the filter.</p>
+    </div>`;
+  }
+
+  html += `</div>`; // end tab-check
+
+  document.getElementById('roast-app').innerHTML = html;
+}
+
+function switchTab(tab) {
+  const roastDiv = document.getElementById('tab-roast');
+  const checkDiv = document.getElementById('tab-check');
+  const btns = document.querySelectorAll('.tab-btn');
+  if (!roastDiv || !checkDiv) return;
+
+  btns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  roastDiv.style.display = tab === 'roast' ? '' : 'none';
+  checkDiv.style.display = tab === 'check' ? '' : 'none';
+}
+
+// Sticky mobile CTA logic
+(function() {
+  const sticky = document.getElementById('sticky-cta');
+  const closeBtn = document.getElementById('sticky-close');
+  const bottomCta = document.getElementById('bottom-cta');
+  if (!sticky || !closeBtn || !bottomCta) return;
+
+  let dismissed = false;
+  let shown = false;
+
+  closeBtn.addEventListener('click', function() {
+    dismissed = true;
+    sticky.classList.remove('visible');
+  });
+
+  function checkScroll() {
+    if (dismissed) return;
+
+    const scrollY = window.scrollY || window.pageYOffset;
+    const bottomCtaRect = bottomCta.getBoundingClientRect();
+    const bottomCtaVisible = bottomCtaRect.top < window.innerHeight;
+
+    // Show after scrolling 200px, hide when bottom CTA is visible
+    if (scrollY > 200 && !bottomCtaVisible) {
+      if (!shown) { sticky.classList.add('visible'); shown = true; }
+    } else {
+      if (shown) { sticky.classList.remove('visible'); shown = false; }
+    }
+  }
+
+  window.addEventListener('scroll', checkScroll, { passive: true });
+  checkScroll();
+})();
+</script>
+</body>
+</html>
