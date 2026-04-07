@@ -8,23 +8,35 @@ Built with FastAPI, Vue 3, Google Gemini, and LaTeX.
 
 ## How It Works
 
-```
-Upload PDF ──> pdfplumber extract ──> Gemini Flash structures ──> ResumeInfo (JSON)
-                                                                        |
-Job Description ────────────────────────────────────────────────────────>|
-                                                                        v
-                                                             Gemini Pro tailors
-                                                                        |
-                                                                        v
-                                                             CustomResumeInfo
-                                                                        |
-                                                                        v
-                                                        LaTeX builder + pdflatex ──> PDF
+```mermaid
+flowchart LR
+    A[Upload PDF] --> B[pdfplumber\nextract text]
+    B --> C[Gemini Flash\nstructure profile]
+    C --> D[(ResumeInfo\nstored in DB)]
+    E[Job Description] --> F[Gemini Pro\ntailor resume]
+    D --> F
+    F --> G[CustomResumeInfo\nreview & edit]
+    G --> H[LaTeX builder\n+ pdflatex]
+    H --> I[PDF]
 ```
 
 **Phase 1 — AI Generation:** Your structured profile + the job description go to Gemini Pro, which produces a tailored, keyword-optimized resume. You can review and edit before proceeding.
 
 **Phase 2 — PDF Compilation:** The tailored resume is converted to LaTeX using a custom document class (`resume.cls`), then compiled to PDF via `pdflatex`.
+
+### Job Status Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> GENERATING_RESUME
+    GENERATING_RESUME --> RESUME_GENERATED
+    RESUME_GENERATED --> GENERATING_PDF
+    GENERATING_PDF --> READY
+    READY --> [*]
+    GENERATING_RESUME --> FAILED
+    GENERATING_PDF --> FAILED
+```
 
 ## Features
 
