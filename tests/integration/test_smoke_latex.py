@@ -30,6 +30,7 @@ async def test_latex_full_resume():
         name="John Smith",
         email="john@example.com",
         mobile_number="+1-555-0100",
+        summary="Backend engineer with experience building reliable distributed systems.",
         past_experience=[
             CustomExperience(
                 company_name="Acme Corp",
@@ -76,5 +77,30 @@ async def test_latex_special_chars_survive():
     sanitized_info = CustomResumeInfo.model_validate(sanitized)
     latex_code = build_resume(sanitized_info)
     pdf_bytes = await compile_latex(latex_code)
+
+    assert pdf_bytes[:5] == b"%PDF-"
+
+
+@pytest.mark.asyncio
+async def test_latex_legacy_resume_class_still_compiles():
+    """Legacy stored LaTeX that still references resume.cls should keep compiling."""
+    legacy_latex = r"""
+\documentclass{resume}
+\usepackage[left=0.4in,top=0.3in,right=0.4in,bottom=0.3in]{geometry}
+\usepackage[T1]{fontenc}
+\input{glyphtounicode}
+\pdfgentounicode=1
+\name{Legacy Resume}
+\address{legacy@example.com}
+\begin{document}
+\begin{rSection}{Experience}
+\begin{rSubsection}{Acme Corp}{2020 -- Present}{Engineer}{}
+\item Built core systems
+\end{rSubsection}
+\end{rSection}
+\end{document}
+"""
+
+    pdf_bytes = await compile_latex(legacy_latex)
 
     assert pdf_bytes[:5] == b"%PDF-"

@@ -58,6 +58,7 @@ class CustomResumeInfo(BaseModel):
     email: str = Field(..., title="Email")
     mobile_number: Optional[str] = Field(default=None, title="Mobile number")
     date_of_birth: Optional[str] = Field(default=None, title="Date of birth")
+    summary: Optional[str] = Field(default=None, title="Optional professional summary")
     links: List[CustomLink] = Field(default=[], title="List of links")
     projects: List[CustomProject] = Field(default=[], title="List of projects")
     past_experience: List[CustomExperience] = Field(default=[], title="List of experiences")

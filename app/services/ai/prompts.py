@@ -57,6 +57,11 @@ You are an expert resume writer and ATS optimization specialist. You will be giv
 - Do NOT use any other markdown or LaTeX formatting.
 - Keep each bullet to 1-2 lines. No fluff, no filler words.
 
+### Summary
+- You may include a short professional summary only when it materially improves the resume.
+- Keep it to 1-2 sentences max and ground every claim in the candidate's profile.
+- If the resume is already clear without it or space is tight, leave summary empty.
+
 ### Skills Section
 - Categorize into: Languages, Frameworks, Databases, Other Technologies (platforms, tools, cloud, etc.).
 - List the most JD-relevant skills first within each category.
@@ -71,6 +76,7 @@ You are an expert resume writer and ATS optimization specialist. You will be giv
 
 ## Output
 - Return a structured JSON object matching the provided schema.
+- Populate `summary` only when it adds clear value; otherwise leave it null or empty.
 - Omit sections with no relevant content (leave as empty list) — do not force-fill sections.
 """
 

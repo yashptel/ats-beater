@@ -97,3 +97,41 @@ async def test_job_chat_persists_history(client, ready_job, configured_ai_settin
     assert history[1]["name"] == "get_resume"
     assert history[2]["role"] == "model"
     assert history[2]["content"] == "Your tailored resume already highlights Python."
+
+
+@pytest.mark.asyncio
+async def test_job_chat_persists_summary_updates(
+    client,
+    db_session,
+    ready_job,
+    configured_ai_settings,
+):
+    updated_resume = {
+        **ready_job.custom_resume_data,
+        "summary": "Backend engineer focused on reliable APIs and scalable systems.",
+    }
+
+    async def mock_stream(**kwargs):
+        yield {"type": "tool_call", "name": "edit_resume", "label": "Editing resume..."}
+        yield {
+            "type": "response",
+            "response": "Added a concise summary at the top of the resume.",
+            "resume_modified": True,
+            "custom_resume_data": updated_resume,
+        }
+
+    with patch(
+        "app.api.chat.chat_service.chat_stream",
+        side_effect=mock_stream,
+    ):
+        response = await client.post(
+            f"/jobs/{ready_job.id}/chat",
+            json={"message": "add a short professional summary"},
+        )
+
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    assert events[-1]["custom_resume_data"]["summary"] == updated_resume["summary"]
+
+    await db_session.refresh(ready_job)
+    assert ready_job.custom_resume_data["summary"] == updated_resume["summary"]

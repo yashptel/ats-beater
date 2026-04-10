@@ -7,6 +7,7 @@ def test_custom_resume_info_minimal():
         email="john@example.com",
     )
     assert info.name == "John Doe"
+    assert info.summary is None
     assert info.achievements == []
     assert info.skills.languages == []
 
@@ -32,3 +33,12 @@ def test_custom_resume_info_with_experience():
     assert len(info.past_experience) == 1
     assert len(info.past_experience[0].description) == 2
     assert "Python" in info.skills.languages
+
+
+def test_custom_resume_info_with_summary():
+    info = CustomResumeInfo(
+        name="Jane",
+        email="jane@example.com",
+        summary="Backend engineer with experience in distributed systems.",
+    )
+    assert info.summary == "Backend engineer with experience in distributed systems."

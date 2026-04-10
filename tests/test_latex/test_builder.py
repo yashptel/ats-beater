@@ -9,8 +9,9 @@ def test_build_resume_minimal():
         email="john@example.com",
     )
     latex = build_resume(info)
-    assert r"\documentclass{resume}" in latex
-    assert r"\name{John Doe}" in latex
+    assert r"\documentclass[letterpaper,11pt]{article}" in latex
+    assert r"\documentclass{resume}" not in latex
+    assert r"\textbf{\Huge \scshape John Doe}" in latex
     assert r"\begin{document}" in latex
     assert r"\end{document}" in latex
 
@@ -46,9 +47,42 @@ def test_build_resume_with_skills():
         ),
     )
     latex = build_resume(info)
-    assert "Skills" in latex
+    assert "Technical Skills" in latex
+    assert r"\textbf{Languages:}" in latex
     assert "Python" in latex
     assert "FastAPI" in latex
+
+
+def test_build_resume_with_summary():
+    info = CustomResumeInfo(
+        name="Test",
+        email="test@test.com",
+        summary="Backend engineer with experience building reliable APIs.",
+        skills=CustomSkills(languages=["Python"]),
+        past_experience=[
+            CustomExperience(
+                company_name="Acme",
+                role="Dev",
+                description=["Built APIs"],
+                start_date="2020-01",
+                end_date="2023-06",
+            )
+        ],
+    )
+    latex = build_resume(info)
+    assert r"\section{Summary}" in latex
+    assert "Backend engineer with experience building reliable APIs." in latex
+    assert latex.index(r"\section{Summary}") < latex.index(r"\section{Technical Skills}")
+    assert latex.index(r"\section{Technical Skills}") < latex.index(r"\section{Experience}")
+
+
+def test_build_resume_omits_summary_when_empty():
+    info = CustomResumeInfo(
+        name="Test",
+        email="test@test.com",
+    )
+    latex = build_resume(info)
+    assert r"\section{Summary}" not in latex
 
 
 def test_build_resume_with_emphasis():
@@ -174,3 +208,4 @@ def test_build_resume_with_projects():
     latex = build_resume(info)
     assert "Projects" in latex
     assert "MyProject" in latex
+    assert r"\resumeProjectHeading" in latex
