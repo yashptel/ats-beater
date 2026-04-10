@@ -192,11 +192,9 @@ def _add_experience(resume_latex: str, resume_info: CustomResumeInfo) -> str:
 
 def _project_heading(project: CustomProject) -> tuple[str, str]:
     left = rf"\textbf{{{project.name}}}"
-    right = ""
     if _is_http_url(project.link):
         left = _latex_link(project.link, rf"\textbf{{{project.name}}}")
-        right = _latex_link(project.link, "Link")
-    return left, right
+    return left, ""
 
 
 def _add_projects(resume_latex: str, resume_info: CustomResumeInfo) -> str:

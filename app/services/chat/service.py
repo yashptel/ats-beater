@@ -46,7 +46,14 @@ def edit_resume(tool_args: dict[str, Any], resume: dict) -> tuple[dict, dict]:
             {"status": "success", "changes_applied": len(operations)},
             new_resume,
         )
-    except (ValueError, json.JSONDecodeError, jsonpatch.JsonPatchException, ValidationError) as exc:
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        json.JSONDecodeError,
+        jsonpatch.JsonPatchException,
+        ValidationError,
+    ) as exc:
         return (
             {"status": "error", "message": str(exc)},
             resume,
@@ -71,7 +78,7 @@ Sections appear in this fixed order (empty sections are automatically omitted):
 2. **Summary**: Optional 1-2 sentence professional summary
 3. **Technical Skills**: Inline labeled skill groups such as Languages, Frameworks, Databases, Other Technologies
 4. **Experience**: Each entry has company name on the left, date on the right, role below, then bullet points
-5. **Projects**: Each entry has project name on the left, optional link on the right, then bullet points
+5. **Projects**: Each entry has the project name on the left, linked when a valid project URL exists, then bullet points
 6. **Education**: Institution and dates on the first row, degree and grade on the second row
 7. **Achievements**: Simple bullet list
 8. **Certifications**: Bullet list, credential_id rendered as "Verify" hyperlink if it's a URL, otherwise "ID: ..."
@@ -86,11 +93,12 @@ to bold in the PDF. No other markdown is supported.
 - `edit_resume`: Apply JSON Patch (RFC 6902) operations by passing `operations_json`, a JSON string containing
   an array of patch operations.
   Example:
-  `[{"op":"replace","path":"/past_experience/0/description/0","value":"Built **X** with **Y**"}]`
+  `[{{"op":"replace","path":"/past_experience/0/description/0","value":"Built **X** with **Y**"}}]`
 
 ## Resume Structure (CustomResumeInfo)
 - /name, /email, /mobile_number, /date_of_birth — personal info
 - /summary — optional short professional summary
+  To remove it, delete `/summary` or set it to null.
 - /links/N — {{name, url}}
 - /past_experience/N — {{company_name, role, start_date, end_date, description: [bullet strings]}}
 - /projects/N — {{name, link, description: [bullet strings]}}

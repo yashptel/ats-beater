@@ -46,7 +46,14 @@ def edit_profile(tool_args: dict[str, Any], profile: dict) -> tuple[dict, dict]:
             {"status": "success", "changes_applied": len(operations)},
             new_profile,
         )
-    except (ValueError, json.JSONDecodeError, jsonpatch.JsonPatchException, ValidationError) as exc:
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        json.JSONDecodeError,
+        jsonpatch.JsonPatchException,
+        ValidationError,
+    ) as exc:
         return (
             {"status": "error", "message": str(exc)},
             profile,
