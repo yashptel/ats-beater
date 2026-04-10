@@ -8,6 +8,7 @@ from app.main import create_tracked_task
 from app.models.user import User
 from app.dependencies import get_current_user
 from app.services.profile.service import ProfileService
+from app.services.ai.user_settings import AISettingsService
 from app.services.storage.gcs import GCSClient
 from app.schemas.profile import UpsertPayload
 
@@ -15,6 +16,7 @@ logger = getLogger(__name__)
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 service = ProfileService()
+ai_settings_service = AISettingsService()
 
 
 @router.post("/upload", status_code=202)
@@ -23,6 +25,7 @@ async def upload_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await ai_settings_service.require_settings(db, current_user.id)
     pdf_bytes = await file.read()
     profile_id = await service.create_profile(db, current_user.id, pdf_bytes)
 
@@ -125,6 +128,7 @@ async def enhance_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await ai_settings_service.require_settings(db, current_user.id)
     profile = await service.enhance_profile(db, profile_id, current_user.id)
     return {"id": profile.id, "resume_info": profile.resume_info}
 

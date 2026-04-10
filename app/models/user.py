@@ -25,3 +25,7 @@ class User(TimestampMixin, Base):
     credit = relationship("UserCredit", back_populates="user", uselist=False)
     tenant = relationship("Tenant", back_populates="users")
     roasts = relationship("Roast", back_populates="user")
+    ai_settings = relationship(
+        "UserAISettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    chat_messages = relationship("ChatMessage", back_populates="user")

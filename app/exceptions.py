@@ -43,3 +43,11 @@ class BadRequestError(Exception):
 class ConflictError(Exception):
     """409 — e.g. concurrent chat request on the same session."""
     pass
+
+
+class AISettingsRequiredError(Exception):
+    pass
+
+
+class InvalidAISettingsError(Exception):
+    pass

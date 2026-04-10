@@ -10,7 +10,7 @@ from app.models.job import JobStatus
 from app.models.user import User
 from app.dependencies import get_current_user
 from app.services.job.service import JobService
-from app.services.credit.service import CreditService
+from app.services.ai.user_settings import AISettingsService
 from app.schemas.job import JobCreate
 from logging import getLogger
 
@@ -18,7 +18,7 @@ logger = getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 service = JobService()
-credit_service = CreditService()
+ai_settings_service = AISettingsService()
 
 
 def _pdf_filename(job) -> str:
@@ -74,11 +74,6 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Pre-check credits before creating the job — don't leave dead PENDING jobs
-    has_credits = await credit_service.has_credits_available(db, current_user.id)
-    if not has_credits:
-        from app.exceptions import UsageLimitExceeded
-        raise UsageLimitExceeded("No credits available. Purchase credits or wait for daily free credits to reset.")
     job = await service.create_job(db, current_user.id, payload.profile_id, payload.job_description)
     return {"job_id": job.id, "status": job.status.value}
 
@@ -89,7 +84,8 @@ async def generate_resume(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # SELECT FOR UPDATE prevents double-charge race: second concurrent request
+    await ai_settings_service.require_settings(db, current_user.id)
+    # SELECT FOR UPDATE prevents duplicate generation: a second concurrent request
     # blocks here until the first commits GENERATING_RESUME, then fails the guard.
     job = await service.get_job(db, job_id, current_user.id, for_update=True)
 
@@ -99,10 +95,7 @@ async def generate_resume(
             f"Job is already {job.status.value} — cannot re-generate"
         )
 
-    # Deduct credit synchronously — raises 429 if no credits available
-    source = await credit_service.check_and_deduct(db, current_user.id, job_id)
-
-    # Update status synchronously to prevent double-charge on rapid re-calls
+    # Update status synchronously to prevent duplicate generation on rapid re-calls
     job.status = JobStatus.GENERATING_RESUME
     await db.commit()
 
@@ -112,24 +105,14 @@ async def generate_resume(
 
     async def _generate():
         async with async_session_factory() as bg_db:
-            phase1_succeeded = False
             try:
                 await service.generate_custom_resume(bg_db, job_id, user_id)
-                phase1_succeeded = True
                 # Auto-chain: if Phase 1 succeeded, immediately run Phase 2
                 job = await service.get_job(bg_db, job_id, user_id)
                 if job.status.value == "RESUME_GENERATED":
                     await service.generate_pdf(bg_db, job_id, user_id)
             except Exception:
                 logger.exception(f"Background generation failed for job {job_id}")
-                # Only refund if Phase 1 (AI) failed — if Phase 1 succeeded
-                # the user already has their tailored resume and can retry PDF for free.
-                if not phase1_succeeded and source != "time_pass":
-                    try:
-                        await credit_service.refund_credit(bg_db, user_id, job_id, source)
-                        logger.info(f"Refunded credit for failed job {job_id}")
-                    except Exception:
-                        logger.exception(f"Failed to refund credit for job {job_id}")
 
     create_tracked_task(_generate())
     return {"job_id": job_id, "status": "GENERATING_RESUME"}

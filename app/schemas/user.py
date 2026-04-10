@@ -12,6 +12,8 @@ class UserResponse(BaseModel):
     is_super_admin: bool = False
     tenant_id: Optional[str] = None
     tenant_name: Optional[str] = None
+    has_ai_settings: bool = False
+    selected_model: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

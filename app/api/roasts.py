@@ -8,6 +8,7 @@ from app.main import create_tracked_task
 from app.models.user import User
 from app.dependencies import get_current_user
 from app.services.roast.service import RoastService
+from app.services.ai.user_settings import AISettingsService
 from app.services.storage.gcs import GCSClient
 from app.models.roast import RoastStatus
 
@@ -15,6 +16,7 @@ logger = getLogger(__name__)
 
 router = APIRouter(prefix="/roasts", tags=["roasts"])
 service = RoastService()
+ai_settings_service = AISettingsService()
 
 
 @router.post("/upload", status_code=202)
@@ -23,6 +25,7 @@ async def upload_roast(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await ai_settings_service.require_settings(db, current_user.id)
     pdf_bytes = await file.read()
     file_hash = service.compute_hash(pdf_bytes)
 

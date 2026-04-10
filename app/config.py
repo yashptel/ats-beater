@@ -1,5 +1,3 @@
-import os
-
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -10,9 +8,9 @@ class Settings(BaseSettings):
 
     # AI
     GEMINI_API_KEY: str = ""
-    GOOGLE_API_KEY: str = ""  # ADK reads this env var for Google AI API auth
     GEMINI_FLASH_MODEL: str = "gemini-3-flash-preview"
     GEMINI_PRO_MODEL: str = "gemini-3.1-pro-preview"
+    USER_API_KEY_ENCRYPTION_KEY: str = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 
     # Auth
     GOOGLE_CLIENT_ID: str = ""
@@ -41,14 +39,13 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:8000"
     DEV_AUTH_BYPASS: bool = False
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 @lru_cache
 def get_settings() -> Settings:
-    settings = Settings()
-    # Google ADK reads GOOGLE_API_KEY from os.environ (not from Pydantic fields).
-    # Ensure it's set so the ADK Runner can create genai.Client() without explicit api_key.
-    if settings.GOOGLE_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
-        os.environ["GOOGLE_API_KEY"] = settings.GOOGLE_API_KEY
-    return settings
+    return Settings()

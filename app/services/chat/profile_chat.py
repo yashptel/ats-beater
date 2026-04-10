@@ -1,51 +1,57 @@
+import json
 import time
 from logging import getLogger
 from typing import Any, AsyncGenerator
 
 import jsonpatch
-from pydantic import ValidationError
-from google.adk.agents import Agent
-from google.adk.runners import Runner
-from google.adk.sessions import DatabaseSessionService
-from google.adk.tools import ToolContext
+from google import genai
 from google.genai import types
+from pydantic import ValidationError
 
-from app.config import get_settings
 from app.schemas.resume import ResumeInfo
 from app.services.ai.inference import _log_request
+from app.services.chat.history import load_history
 
 logger = getLogger(__name__)
 
-APP_NAME = "ats-beater-profile-chat"
 
-# ── Agent tools (module-level functions) ────────────────────────────────
-
-
-def get_profile(tool_context: ToolContext) -> dict:
-    """Read the current profile data. Call this to see the profile before making changes."""
-    return tool_context.state.get("profile", {})
+def get_profile(profile: dict) -> dict:
+    """Read the current profile data."""
+    return profile
 
 
-def edit_profile(operations: list[dict], tool_context: ToolContext) -> dict:
-    """Apply changes to the profile using JSON Patch (RFC 6902).
+def _extract_operations(tool_args: dict[str, Any]) -> list[dict]:
+    if isinstance(tool_args.get("operations"), list):
+        return tool_args["operations"]
 
-    Args:
-        operations: List of patch ops. Each has: op ("replace"/"add"/"remove"),
-                    path (JSON pointer like "/past_experience/0/description"),
-                    value (new value, not needed for "remove").
-    """
-    current = tool_context.state.get("profile", {})
+    raw_operations = tool_args.get("operations_json")
+    if isinstance(raw_operations, list):
+        return raw_operations
+    if isinstance(raw_operations, str):
+        parsed = json.loads(raw_operations)
+        if isinstance(parsed, list):
+            return parsed
+    raise ValueError("edit_profile requires operations_json as a JSON array")
+
+
+def edit_profile(tool_args: dict[str, Any], profile: dict) -> tuple[dict, dict]:
+    """Apply JSON Patch operations to the current profile."""
     try:
+        operations = _extract_operations(tool_args)
         patch = jsonpatch.JsonPatch(operations)
-        updated = patch.apply(current)
+        updated = patch.apply(profile)
         validated = ResumeInfo.model_validate(updated)
-        tool_context.state["profile"] = validated.model_dump()
-        return {"status": "success", "changes_applied": len(operations)}
-    except (jsonpatch.JsonPatchException, ValidationError) as e:
-        return {"status": "error", "message": str(e)}
+        new_profile = validated.model_dump()
+        return (
+            {"status": "success", "changes_applied": len(operations)},
+            new_profile,
+        )
+    except (ValueError, json.JSONDecodeError, jsonpatch.JsonPatchException, ValidationError) as exc:
+        return (
+            {"status": "error", "message": str(exc)},
+            profile,
+        )
 
-
-# ── System prompt ──────────────────────────────────────────────────────
 
 PROFILE_CHAT_SYSTEM_PROMPT = """You are a profile editing assistant. The user wants to update their resume profile through conversation.
 Help them refine it naturally.
@@ -65,8 +71,8 @@ compiled into an ATS-optimized PDF using LaTeX. THAT is where the downloadable P
 **Roast (separate page, via the sidebar):** A free feature where users can get their resume "roasted" — a
 comedic + serious analysis of their resume with an ATS readiness checklist. No PDF is generated here.
 
-**Credits:** Generating tailored resumes costs credits. Users get 3 free per day. Additional credit packs
-can be purchased. Roasts are free.
+**Credits:** Legacy credits and purchases still exist in the product, but profile editing here is about your
+structured profile data.
 
 ### Handling download/PDF questions
 **If the user asks "how do I download?", "give me PDF", "is this downloadable?", "provide me a resume",
@@ -83,10 +89,11 @@ and when they're ready to apply, they paste a job description in the Jobs sectio
 Also mention they can try the free **Roast** feature to get feedback on their resume's ATS readiness.
 
 ## Your Tools
-- get_profile: Read the current profile data. Call this first if you need to see the current state.
-- edit_profile: Apply changes using JSON Patch (RFC 6902) operations.
-  Supported ops: "replace", "add", "remove"
-  Example: [{"op": "replace", "path": "/name", "value": "Jane Doe"}]
+- `get_profile`: Read the current profile data. Call this first if you need to see the current state.
+- `edit_profile`: Apply JSON Patch operations by passing `operations_json`, a JSON string containing an
+  RFC 6902 patch array.
+  Example:
+  `[{"op":"replace","path":"/name","value":"Jane Doe"}]`
 
 ## Profile Structure (ResumeInfo)
 - /name, /email, /mobile_number, /date_of_birth — personal info
@@ -146,114 +153,121 @@ NEVER give a number. If the user insists on a score, firmly explain why scores d
 """
 
 
-# ── ProfileChatService ─────────────────────────────────────────────────
-
-
 class ProfileChatService:
-    def __init__(self):
-        settings = get_settings()
-        self.session_service = DatabaseSessionService(
-            db_url=settings.DATABASE_URL
-        )
-        self.flash_model = settings.GEMINI_FLASH_MODEL
-
-    def _build_agent(self, user_id: str, profile_id: int) -> Agent:
-        model_name = self.flash_model
-        _profile_id = profile_id
-        _user_id = user_id
-
-        async def _after_model_callback(callback_context, llm_response):
-            """Log LLM call metrics to llm_requests table."""
-            usage = llm_response.usage_metadata
-            await _log_request(
-                model_name=model_name,
-                user_id=_user_id,
-                purpose="profile_chat_edit",
-                reference_id=str(_profile_id),
-                input_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
-                output_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
-                total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
-                cached_tokens=getattr(usage, "cached_content_token_count", 0) if usage else 0,
-                response_time_ms=0,
-                success=True,
-                error_message=None,
-            )
-            return llm_response
-
-        return Agent(
-            model=self.flash_model,
-            name="profile_editor",
-            instruction=PROFILE_CHAT_SYSTEM_PROMPT,
-            tools=[get_profile, edit_profile],
-            after_model_callback=_after_model_callback,
-        )
-
-    async def chat(
-        self,
-        profile_id: int,
-        user_id: str,
-        message: str,
-        current_profile: dict,
-    ) -> dict[str, Any]:
-        session_id = f"profile_chat_{profile_id}"
-
-        agent = self._build_agent(user_id, profile_id)
-        runner = Runner(
-            agent=agent,
-            app_name=APP_NAME,
-            session_service=self.session_service,
-        )
-
-        # Get or create session
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        if not session:
-            session = await self.session_service.create_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-                state={"profile": current_profile},
-            )
-
-        new_message = types.Content(
-            role="user", parts=[types.Part.from_text(text=message)]
-        )
-
-        response_text = ""
-        resume_modified = False
-        t0 = time.monotonic()
-
-        async for event in runner.run_async(
-            user_id=user_id, session_id=session_id, new_message=new_message,
-        ):
-            if event.actions and event.actions.state_delta:
-                if "profile" in event.actions.state_delta:
-                    resume_modified = True
-            if event.is_final_response() and event.content:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
-
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
-        logger.info(f"Profile chat turn for profile {profile_id}: {elapsed_ms}ms, modified={resume_modified}")
-
-        # Get updated profile from session state
-        updated_session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        updated_profile = updated_session.state.get("profile") if updated_session else None
-
-        return {
-            "response": response_text,
-            "resume_modified": resume_modified,
-            "resume_info": updated_profile,
-        }
-
     _TOOL_LABELS = {
         "get_profile": "Reading profile...",
         "edit_profile": "Editing profile...",
     }
+
+    def _build_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=PROFILE_CHAT_SYSTEM_PROMPT,
+            temperature=0.2,
+            tools=[
+                types.Tool(
+                    function_declarations=[
+                        types.FunctionDeclaration(
+                            name="get_profile",
+                            description="Read the current profile before editing it.",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                        types.FunctionDeclaration(
+                            name="edit_profile",
+                            description=(
+                                "Apply JSON Patch operations to the current profile. "
+                                "Pass operations_json as a JSON array string."
+                            ),
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "operations_json": {
+                                        "type": "string",
+                                        "description": (
+                                            "A JSON string containing an array of RFC 6902 patch "
+                                            "operations. Example: "
+                                            "[{\"op\":\"replace\",\"path\":\"/skills/0/name\",\"value\":\"Python\"}]"
+                                        ),
+                                    }
+                                },
+                                "required": ["operations_json"],
+                            },
+                        ),
+                    ]
+                )
+            ],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
+            thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+        )
+
+    def _extract_function_calls(self, response) -> list[Any]:
+        function_calls = list(getattr(response, "function_calls", []) or [])
+        if function_calls:
+            return function_calls
+
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return []
+        parts = getattr(candidates[0].content, "parts", None) or []
+        return [part.function_call for part in parts if getattr(part, "function_call", None)]
+
+    def _extract_model_content(self, response):
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return None
+        return getattr(candidates[0], "content", None)
+
+    async def _generate_content(
+        self,
+        *,
+        client: genai.Client,
+        model_name: str,
+        config: types.GenerateContentConfig,
+        contents: list[types.Content],
+        user_id: str,
+        profile_id: int,
+    ):
+        t0 = time.monotonic()
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            await _log_request(
+                model_name=model_name,
+                user_id=user_id,
+                purpose="profile_chat_edit",
+                reference_id=str(profile_id),
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                cached_tokens=0,
+                response_time_ms=elapsed_ms,
+                success=False,
+                error_message=str(exc)[:500],
+            )
+            raise
+
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        usage = getattr(response, "usage_metadata", None)
+        await _log_request(
+            model_name=model_name,
+            user_id=user_id,
+            purpose="profile_chat_edit",
+            reference_id=str(profile_id),
+            input_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
+            output_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
+            total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
+            cached_tokens=getattr(usage, "cached_content_token_count", 0) if usage else 0,
+            response_time_ms=elapsed_ms,
+            success=True,
+            error_message=None,
+        )
+        return response
 
     async def chat_stream(
         self,
@@ -261,93 +275,81 @@ class ProfileChatService:
         user_id: str,
         message: str,
         current_profile: dict,
+        *,
+        api_key: str,
+        model_name: str,
     ) -> AsyncGenerator[dict, None]:
-        """Like chat() but yields SSE-friendly events as they happen."""
-        session_id = f"profile_chat_{profile_id}"
+        config = self._build_config()
+        client = genai.Client(api_key=api_key)
 
-        agent = self._build_agent(user_id, profile_id)
-        runner = Runner(
-            agent=agent,
-            app_name=APP_NAME,
-            session_service=self.session_service,
-        )
+        contents: list[types.Content] = [
+            types.Content(role="user", parts=[types.Part.from_text(text=message)])
+        ]
+        profile_state = current_profile
+        profile_modified = False
 
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        if not session:
-            session = await self.session_service.create_session(
-                app_name=APP_NAME,
+        for _ in range(6):
+            response = await self._generate_content(
+                client=client,
+                model_name=model_name,
+                config=config,
+                contents=contents,
                 user_id=user_id,
-                session_id=session_id,
-                state={"profile": current_profile},
+                profile_id=profile_id,
             )
+            function_calls = self._extract_function_calls(response)
+            if not function_calls:
+                yield {
+                    "type": "response",
+                    "response": (getattr(response, "text", "") or "").strip(),
+                    "resume_modified": profile_modified,
+                    "resume_info": profile_state,
+                }
+                return
 
-        new_message = types.Content(
-            role="user", parts=[types.Part.from_text(text=message)]
-        )
+            model_content = self._extract_model_content(response)
+            if model_content:
+                contents.append(model_content)
 
-        response_text = ""
-        resume_modified = False
-        t0 = time.monotonic()
+            function_responses = []
+            for function_call in function_calls:
+                label = self._TOOL_LABELS.get(function_call.name, function_call.name)
+                yield {
+                    "type": "tool_call",
+                    "name": function_call.name,
+                    "label": label,
+                }
 
-        async for event in runner.run_async(
-            user_id=user_id, session_id=session_id, new_message=new_message,
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        label = self._TOOL_LABELS.get(part.function_call.name, part.function_call.name)
-                        yield {"type": "tool_call", "name": part.function_call.name, "label": label}
+                if function_call.name == "get_profile":
+                    result = get_profile(profile_state)
+                elif function_call.name == "edit_profile":
+                    result, updated_profile = edit_profile(function_call.args or {}, profile_state)
+                    if result.get("status") == "success":
+                        profile_state = updated_profile
+                        profile_modified = True
+                else:
+                    result = {"status": "error", "message": "Unknown tool"}
 
-            if event.actions and event.actions.state_delta:
-                if "profile" in event.actions.state_delta:
-                    resume_modified = True
+                function_responses.append(
+                    types.Part.from_function_response(
+                        name=function_call.name,
+                        response={"result": result},
+                    )
+                )
 
-            if event.is_final_response() and event.content:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
-
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
-        logger.info(f"Profile chat turn for profile {profile_id}: {elapsed_ms}ms, modified={resume_modified}")
-
-        updated_session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        updated_profile = updated_session.state.get("profile") if updated_session else None
+            contents.append(types.Content(role="user", parts=function_responses))
 
         yield {
             "type": "response",
-            "response": response_text,
-            "resume_modified": resume_modified,
-            "resume_info": updated_profile,
+            "response": "I couldn't complete that edit cleanly. Please try a more specific request.",
+            "resume_modified": profile_modified,
+            "resume_info": profile_state,
         }
 
-    async def get_history(self, profile_id: int, user_id: str) -> list[dict]:
-        session_id = f"profile_chat_{profile_id}"
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
+    async def get_history(self, db, profile_id: int, user_id: str) -> list[dict]:
+        return await load_history(
+            db,
+            user_id=user_id,
+            entity_type="profile",
+            entity_id=profile_id,
         )
-        if not session:
-            return []
-
-        messages = []
-        for event in session.events:
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        label = self._TOOL_LABELS.get(part.function_call.name, part.function_call.name)
-                        messages.append({
-                            "type": "tool_call",
-                            "name": part.function_call.name,
-                            "label": label,
-                            "timestamp": event.timestamp,
-                        })
-                    elif part.text:
-                        messages.append({
-                            "role": event.content.role,
-                            "content": part.text,
-                            "timestamp": event.timestamp,
-                        })
-        return messages

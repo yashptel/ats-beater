@@ -6,9 +6,12 @@ from sqlalchemy import select
 from app.database.session import get_db
 from app.config import get_settings
 from app.models.user import User
+from app.models.ai_settings import UserAISettings
 from app.models.tenant import Tenant, TenantDomainRule
 from app.models.credit import UserCredit
+from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdateRequest
 from app.services.auth import google_oauth
+from app.services.ai.user_settings import AISettingsService
 from typing import Optional
 from app.services.auth.jwt_handler import create_access_token, decode_expired_token
 from app.dependencies import get_current_user
@@ -18,6 +21,7 @@ from logging import getLogger
 logger = getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+ai_settings_service = AISettingsService()
 
 
 def _get_redirect_uri() -> str:
@@ -141,6 +145,7 @@ async def get_me(
         tenant = await db.get(Tenant, current_user.tenant_id)
         if tenant:
             tenant_name = tenant.name
+    ai_settings = await db.get(UserAISettings, current_user.id)
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -150,4 +155,39 @@ async def get_me(
         "is_super_admin": current_user.is_super_admin,
         "tenant_id": current_user.tenant_id,
         "tenant_name": tenant_name,
+        "has_ai_settings": ai_settings is not None,
+        "selected_model": ai_settings.model_name if ai_settings else None,
     }
+
+
+@router.get("/ai-settings", response_model=AISettingsResponse)
+async def get_ai_settings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ai_settings = await ai_settings_service.get_settings(db, current_user.id)
+    return ai_settings_service.serialize(ai_settings)
+
+
+@router.put("/ai-settings", response_model=AISettingsResponse)
+async def upsert_ai_settings(
+    payload: AISettingsUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ai_settings = await ai_settings_service.upsert_settings(
+        db,
+        current_user.id,
+        api_key=payload.api_key.strip() if payload.api_key else None,
+        model_name=payload.model_name,
+    )
+    return ai_settings_service.serialize(ai_settings)
+
+
+@router.delete("/ai-settings", response_model=AISettingsResponse)
+async def delete_ai_settings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await ai_settings_service.delete_settings(db, current_user.id)
+    return ai_settings_service.serialize(None)

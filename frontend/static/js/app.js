@@ -81,14 +81,17 @@ const api = {
 
   async _parseError(res) {
     let msg;
+    let code = null;
     try {
       const data = await res.json();
-      msg = data.detail || `HTTP ${res.status}`;
+      code = data.detail || null;
+      msg = data.message || data.detail || `HTTP ${res.status}`;
     } catch {
       msg = `HTTP ${res.status}`;
     }
     const err = new Error(msg);
     err.status = res.status;
+    err.code = code;
     return err;
   },
 
@@ -184,6 +187,7 @@ const useAuthStore = defineStore('auth', {
     isLoggedIn: (s) => !!s.user,
     isSuperAdmin: (s) => !!(s.user && s.user.is_super_admin),
     tenantName: (s) => (s.user && s.user.tenant_name) || null,
+    hasAISettings: (s) => !!(s.user && s.user.has_ai_settings),
     initials: (s) => {
       if (!s.user || !s.user.name) return '?';
       return s.user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -205,6 +209,11 @@ const useAuthStore = defineStore('auth', {
     logout() {
       this.user = null;
       localStorage.removeItem('token');
+    },
+    setAIStatus(payload) {
+      if (!this.user) return;
+      this.user.has_ai_settings = !!payload.has_ai_settings;
+      this.user.selected_model = payload.selected_model || null;
     },
   },
 });
@@ -377,14 +386,7 @@ const useJobStore = defineStore('job', {
     async generateResume(jobId) {
       try {
         return await api.post(`/jobs/${jobId}/generate-resume`);
-      } catch (e) {
-        // Check if it's a 429 (credit exhausted) via HTTP status code
-        if (e.status === 429) {
-          e.is429 = true;
-        }
-        this.error = e.message;
-        throw e;
-      }
+      } catch (e) { this.error = e.message; throw e; }
     },
     async generatePdf(jobId) {
       try {
@@ -561,6 +563,72 @@ const useCreditStore = defineStore('credit', {
         this.activeTimePass = data.balance.active_time_pass;
       }
       return data;
+    },
+  },
+});
+
+const useAISettingsStore = defineStore('aiSettings', {
+  state: () => ({
+    hasAISettings: false,
+    selectedModel: null,
+    maskedApiKey: null,
+    apiKeyLast4: null,
+    validatedAt: null,
+    allowedModels: [],
+    loading: false,
+    saving: false,
+    error: null,
+  }),
+  actions: {
+    _apply(data) {
+      this.hasAISettings = !!data.has_ai_settings;
+      this.selectedModel = data.selected_model || null;
+      this.maskedApiKey = data.masked_api_key || null;
+      this.apiKeyLast4 = data.api_key_last4 || null;
+      this.validatedAt = data.validated_at || null;
+      this.allowedModels = data.allowed_models || [];
+    },
+    async fetchSettings() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const data = await api.get('/auth/ai-settings');
+        this._apply(data);
+        return data;
+      } catch (e) {
+        this.error = e.message;
+        throw e;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async saveSettings(payload) {
+      this.saving = true;
+      this.error = null;
+      try {
+        const data = await api.put('/auth/ai-settings', payload);
+        this._apply(data);
+        return data;
+      } catch (e) {
+        this.error = e.message;
+        throw e;
+      } finally {
+        this.saving = false;
+      }
+    },
+    async deleteSettings() {
+      this.saving = true;
+      this.error = null;
+      try {
+        const data = await api.del('/auth/ai-settings');
+        this._apply(data);
+        return data;
+      } catch (e) {
+        this.error = e.message;
+        throw e;
+      } finally {
+        this.saving = false;
+      }
     },
   },
 });
@@ -946,6 +1014,10 @@ const AppSidebar = {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22c-4 0-8-2-8-8 0-4 2-6 4-8 0 3 1.5 4 3 4-1-3 1-7 5-10 0 4 2 6 3 7 1.5 1.5 2 3 2 5 0 6-4 10-9 10z"/></svg>
             Resume Roast
           </router-link>
+          <router-link to="/settings" class="sidebar-link" active-class="active">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.37 17l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.24A2 2 0 1 1 7.04 4.4l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 19.6 7.04l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+          </router-link>
           <router-link to="/credits" class="sidebar-link" active-class="active">
             <span style="font-size:16px;font-weight:700;width:18px;text-align:center;display:inline-block;">$</span>
             Credits
@@ -983,6 +1055,9 @@ const AppSidebar = {
             <div class="text-sm font-medium truncate text-white">{{ auth.user.name }}</div>
             <div class="text-[11px] truncate" style="color:var(--text-dim)">{{ auth.user.email }}</div>
             <div v-if="auth.tenantName" class="text-[10px] truncate font-mono" style="color:var(--teal)">{{ auth.tenantName }}</div>
+            <div class="text-[10px] truncate font-mono" :style="{ color: auth.hasAISettings ? 'var(--green)' : 'var(--orange)' }">
+              {{ auth.hasAISettings ? ('Gemini: ' + (auth.user.selected_model || 'configured')) : 'Gemini setup required' }}
+            </div>
           </div>
           <button @click="doLogout" class="text-slate-500 hover:text-red-400 transition" title="Logout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -1389,6 +1464,15 @@ const ProfileUploadPage = {
         <div class="max-w-xl mx-auto">
           <!-- Loading check -->
           <div v-if="checkingProfiles" class="flex items-center justify-center py-16"><div class="spinner"></div></div>
+          <div v-else-if="!auth.hasAISettings && !uploading && !uploadResult" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
+            <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
+              <div>
+                <p class="text-white font-semibold mb-1">Gemini setup required</p>
+                <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before uploading a resume for AI structuring.</p>
+              </div>
+              <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
+            </div>
+          </div>
           <!-- Already processing -->
           <div v-else-if="processingProfile && !uploading && !uploadResult" class="widget-card text-center py-12 fade-slide-in">
             <div class="mb-4">
@@ -1438,7 +1522,7 @@ const ProfileUploadPage = {
             </div>
             <!-- Upload button -->
             <button class="btn-primary w-full justify-center" @click="doUpload"
-                    :disabled="!selectedFile || !consentAccepted">
+                    :disabled="!auth.hasAISettings || !selectedFile || !consentAccepted">
               CREATE PROFILE
             </button>
             <p v-if="error" class="text-red-400 text-xs mt-3 text-center font-mono">{{ error }}</p>
@@ -1525,6 +1609,7 @@ const ProfileUploadPage = {
     </div>
   `,
   setup() {
+    const auth = useAuthStore();
     const router = useRouter();
     const store = useProfileStore();
     const selectedFile = ref(null);
@@ -1603,6 +1688,7 @@ const ProfileUploadPage = {
       if (file) selectedFile.value = file;
     };
     const doUpload = async () => {
+      if (!auth.hasAISettings) return;
       if (!selectedFile.value || !consentAccepted.value) return;
       if (selectedFile.value.type !== 'application/pdf') {
         error.value = 'Only PDF files are accepted.';
@@ -1720,7 +1806,7 @@ const ProfileUploadPage = {
       return leave;
     });
 
-    return { selectedFile, consentAccepted, isDragging, uploading, uploadResult, finalStatus, error, progress, statusLines, phaseLabel, ocrLines, visibleOcrLines, ocrDone, checkingProfiles, processingProfile, handleDrop, handleFileSelect, doUpload, reset, goToProfile, goToProcessing };
+    return { auth, selectedFile, consentAccepted, isDragging, uploading, uploadResult, finalStatus, error, progress, statusLines, phaseLabel, ocrLines, visibleOcrLines, ocrDone, checkingProfiles, processingProfile, handleDrop, handleFileSelect, doUpload, reset, goToProfile, goToProcessing };
   },
 };
 
@@ -2418,6 +2504,15 @@ const JobCreatePage = {
         <div class="max-w-2xl mx-auto">
           <!-- ====== FORM (visible when not processing) ====== -->
           <template v-if="!processing && !finalStatus">
+            <div v-if="!auth.hasAISettings" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
+              <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
+                <div>
+                  <p class="text-white font-semibold mb-1">Gemini setup required</p>
+                  <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before generating tailored resumes.</p>
+                </div>
+                <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
+              </div>
+            </div>
             <!-- Step 1: Select Profile -->
             <div class="widget-card mb-6 fade-slide-in stagger-1">
               <div class="section-label">Step 1: Select Profile</div>
@@ -2477,7 +2572,7 @@ const JobCreatePage = {
             <!-- Submit -->
             <div class="fade-slide-in stagger-3">
               <button class="btn-primary w-full justify-center" @click="submit"
-                      :disabled="!selectedProfile || !company.trim() || !role.trim() || !jobDescription.trim() || submitting || profileStore.loading">
+                      :disabled="!auth.hasAISettings || !selectedProfile || !company.trim() || !role.trim() || !jobDescription.trim() || submitting || profileStore.loading">
                 <span v-if="submitting" class="spinner" style="width:16px;height:16px;border-width:2px;"></span>
                 {{ submitting ? 'CREATING...' : 'GENERATE RESUME' }}
               </button>
@@ -2574,10 +2669,10 @@ const JobCreatePage = {
     </div>
   `,
   setup() {
+    const auth = useAuthStore();
     const router = useRouter();
     const profileStore = useProfileStore();
     const jobStore = useJobStore();
-    const creditStore = useCreditStore();
     const selectedProfile = ref(null);
     const company = ref('');
     const role = ref('');
@@ -2643,6 +2738,7 @@ const JobCreatePage = {
     };
 
     const submit = async () => {
+      if (!auth.hasAISettings) return;
       if (!selectedProfile.value || !company.value.trim() || !role.value.trim() || !jobDescription.value.trim()) return;
       submitting.value = true;
       error.value = null;
@@ -2660,49 +2756,17 @@ const JobCreatePage = {
         phaseLabel.value = 'Submitting to AI...';
         statusLines.value = [{ text: '[SYS] Job created', ok: true }];
 
-        // Step 2: Trigger generation (handles 429 paywall)
+        // Step 2: Trigger generation
         try {
           await jobStore.generateResume(result.job_id);
           if (unmounted) return;
-          creditStore.fetchBalance();
         } catch (genErr) {
           if (unmounted) return;
-          if (genErr.is429) {
-            phaseLabel.value = 'Waiting for credits...';
-            statusLines.value.push({ text: '[CREDITS] Insufficient credits', ok: false });
-            const bought = await showPaywall();
-            if (unmounted) return;
-            if (bought) {
-              statusLines.value.push({ text: '[CREDITS] Payment received', ok: true });
-              try {
-                await jobStore.generateResume(result.job_id);
-                if (unmounted) return;
-                creditStore.fetchBalance();
-              } catch (retryErr) {
-                if (unmounted) return;
-                // Generation failed after purchase — go to failed state
-                statusLines.value.push({ text: '[SYS] Generation failed', ok: false });
-                stopCycling();
-                processing.value = false;
-                finalStatus.value = 'FAILED';
-                return;
-              }
-            } else {
-              // User dismissed paywall — go to job detail
-              stopCycling();
-              processing.value = false;
-              jobStore.selectJob(result.job_id);
-              router.push('/jobs/view');
-              return;
-            }
-          } else {
-            // Non-429 error
-            statusLines.value.push({ text: '[SYS] ' + genErr.message, ok: false });
-            stopCycling();
-            processing.value = false;
-            finalStatus.value = 'FAILED';
-            return;
-          }
+          statusLines.value.push({ text: '[SYS] ' + genErr.message, ok: false });
+          stopCycling();
+          processing.value = false;
+          finalStatus.value = 'FAILED';
+          return;
         }
 
         // Step 3: Generation triggered — start cycling + polling
@@ -2774,40 +2838,13 @@ const JobCreatePage = {
       try {
         await jobStore.generateResume(createdJobId.value);
         if (unmounted) return;
-        creditStore.fetchBalance();
       } catch (genErr) {
         if (unmounted) return;
-        if (genErr.is429) {
-          const bought = await showPaywall();
-          if (unmounted) return;
-          if (bought) {
-            try {
-              await jobStore.generateResume(createdJobId.value);
-              if (unmounted) return;
-              creditStore.fetchBalance();
-            } catch (retryErr) {
-              if (unmounted) return;
-              stopCycling();
-              processing.value = false;
-              finalStatus.value = 'FAILED';
-              submitting.value = false;
-              return;
-            }
-          } else {
-            stopCycling();
-            processing.value = false;
-            jobStore.selectJob(createdJobId.value);
-            router.push('/jobs/view');
-            submitting.value = false;
-            return;
-          }
-        } else {
-          stopCycling();
-          processing.value = false;
-          finalStatus.value = 'FAILED';
-          submitting.value = false;
-          return;
-        }
+        stopCycling();
+        processing.value = false;
+        finalStatus.value = 'FAILED';
+        submitting.value = false;
+        return;
       }
 
       submitting.value = false;
@@ -2880,14 +2917,10 @@ const JobCreatePage = {
         confirmLabel: 'LEAVE',
         variant: 'warning',
       });
-      if (leave) {
-        // Dismiss paywall if it was open (429 flow) to prevent it persisting
-        if (paywallState.visible) _closePaywall(false);
-      }
       return leave;
     });
 
-    return { profileStore, selectedProfile, company, role, jobDescription, submitting, error, readyProfiles, formatDate, submit, processing, finalStatus, progress, statusLines, phaseLabel, jdLines, visibleJdLines, jdDone, retryGeneration, goToJob, reset };
+    return { auth, profileStore, selectedProfile, company, role, jobDescription, submitting, error, readyProfiles, formatDate, submit, processing, finalStatus, progress, statusLines, phaseLabel, jdLines, visibleJdLines, jdDone, retryGeneration, goToJob, reset };
   },
 };
 
@@ -2952,6 +2985,15 @@ const JobDetailPage = {
         <div v-if="jobStore.loading && !jobStore.current" class="flex items-center justify-center py-16"><div class="spinner"></div></div>
         <div v-else-if="!jobStore.current" class="empty-state py-16"><p class="text-lg text-white">Job not found</p></div>
         <div v-else class="max-w-4xl mx-auto">
+          <div v-if="!auth.hasAISettings && (jobStore.current.status === 'PENDING' || (jobStore.current.status === 'FAILED' && !failedInPhase2))" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
+            <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
+              <div>
+                <p class="text-white font-semibold mb-1">Gemini setup required</p>
+                <p class="text-xs" style="color:var(--text-dim)">This job record exists, but AI generation is blocked until you add your Gemini API key and model in Settings.</p>
+              </div>
+              <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
+            </div>
+          </div>
 
           <!-- ====== PROCESSING STATE ====== -->
           <div v-if="isProcessing" class="widget-card text-center py-12 mb-6 fade-slide-in">
@@ -2990,7 +3032,7 @@ const JobDetailPage = {
           <div v-if="jobStore.current.status === 'PENDING'" class="widget-card text-center py-12 mb-6 fade-slide-in">
             <p class="text-white font-semibold mb-4">Ready to generate a tailored resume</p>
             <p v-if="genError" class="text-xs mb-3" style="color:#ef4444;">{{ genError }}</p>
-            <button @click="doGenerateResume" class="btn-primary" :disabled="generating || jobStore.loading">
+            <button @click="doGenerateResume" class="btn-primary" :disabled="!auth.hasAISettings || generating || jobStore.loading">
               <span v-if="generating" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
               GENERATE RESUME
             </button>
@@ -3022,6 +3064,7 @@ const JobDetailPage = {
     </div>
   `,
   setup() {
+    const auth = useAuthStore();
     const router = useRouter();
     const jobStore = useJobStore();
     const generating = ref(false);
@@ -3138,7 +3181,6 @@ const JobDetailPage = {
     };
 
     // -- Load + auto-poll --
-    const creditStore = useCreditStore();
     const startPolling = () => {
       jobStore.pollStatus(jobId.value).then(() => {
         if (unmounted) return;
@@ -3146,7 +3188,6 @@ const JobDetailPage = {
           if (unmounted) return;
           if (jobStore.current?.status === 'READY') loadPdf();
         });
-        creditStore.fetchBalance();
       });
     };
 
@@ -3168,32 +3209,17 @@ const JobDetailPage = {
     // -- Actions with IMMEDIATE UI feedback --
     const genError = ref(null);
     const doGenerateResume = async () => {
+      if (!auth.hasAISettings) return;
       generating.value = true;
       genError.value = null;
       const prevStatus = jobStore.current?.status;
       if (jobStore.current) jobStore.current.status = 'GENERATING_RESUME';
       try {
         await jobStore.generateResume(jobId.value);
-        creditStore.fetchBalance();
         startPolling();
       } catch (e) {
         if (jobStore.current && prevStatus) jobStore.current.status = prevStatus;
-        if (e.is429) {
-          const bought = await showPaywall();
-          if (bought && !unmounted) {
-            try {
-              if (jobStore.current) jobStore.current.status = 'GENERATING_RESUME';
-              await jobStore.generateResume(jobId.value);
-              creditStore.fetchBalance();
-              startPolling();
-            } catch (retryErr) {
-              if (jobStore.current && prevStatus) jobStore.current.status = prevStatus;
-              genError.value = retryErr.message || 'Generation failed';
-            }
-          }
-        } else {
-          genError.value = e.message || 'Generation failed';
-        }
+        genError.value = e.message || 'Generation failed';
       }
       finally { generating.value = false; }
     };
@@ -3240,7 +3266,7 @@ const JobDetailPage = {
       if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value);
     });
 
-    return { jobStore, jobId, generating, downloading, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, doGenerateResume, doGeneratePdf, smartRetry, doDownload };
+    return { auth, jobStore, jobId, generating, downloading, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, doGenerateResume, doGeneratePdf, smartRetry, doDownload };
   },
 };
 
@@ -4132,6 +4158,15 @@ const RoastPage = {
 
           <!-- ====== UPLOAD ZONE ====== -->
           <div v-if="phase === 'upload'" class="fade-slide-in">
+            <div v-if="!auth.hasAISettings" class="widget-card p-6 mb-6" style="border-left:3px solid var(--orange);">
+              <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
+                <div>
+                  <p class="text-white font-semibold mb-1">Gemini setup required</p>
+                  <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before running AI roast analysis.</p>
+                </div>
+                <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
+              </div>
+            </div>
             <div class="upload-zone mb-6"
                  :class="{ dragover: isDragging }"
                  @dragover.prevent="isDragging = true"
@@ -4147,7 +4182,7 @@ const RoastPage = {
               <p class="text-xs" style="color:var(--text-dim)">PDF files only, max 5MB</p>
             </div>
             <button class="btn-primary w-full justify-center" @click="doUpload"
-                    :disabled="!selectedFile">
+                    :disabled="!auth.hasAISettings || !selectedFile">
               ROAST MY RESUME
             </button>
             <p v-if="error" class="text-red-400 text-xs mt-3 text-center font-mono">{{ error }}</p>
@@ -4373,6 +4408,7 @@ const RoastPage = {
     </div>
   `,
   setup() {
+    const auth = useAuthStore();
     const store = useRoastStore();
     const phase = ref('upload'); // upload | processing | result | failed
     const selectedFile = ref(null);
@@ -4491,6 +4527,7 @@ const RoastPage = {
     };
 
     const doUpload = async () => {
+      if (!auth.hasAISettings) return;
       if (!selectedFile.value) return;
       if (selectedFile.value.type !== 'application/pdf') {
         error.value = 'Only PDF files are accepted.';
@@ -4665,7 +4702,7 @@ const RoastPage = {
       return leave;
     });
 
-    return {
+    return { auth,
       store, phase, selectedFile, isDragging, error, roastData, currentShareId, shareToast, roastTab,
       progress, statusLines, phaseLabel, showProfileCta,
       atsPassCount, atsPassStyle, getAtsDescription,
@@ -4723,7 +4760,7 @@ const CreditHistoryPage = {
             </div>
             <!-- Low credits nudge -->
             <div v-if="!creditStore.hasUnlimited && creditStore.balance === 0 && creditStore.dailyFreeRemaining === 0" class="mt-4 pt-3 border-t border-white/5 text-center">
-              <p class="text-xs font-mono" style="color:var(--orange)">You're out of credits — grab a pack below to keep generating resumes</p>
+              <p class="text-xs font-mono" style="color:var(--orange)">Credit balances are still tracked here for purchases, promos, and admin workflows.</p>
             </div>
           </div>
 
@@ -4731,8 +4768,8 @@ const CreditHistoryPage = {
           <div class="rounded-lg p-4 mb-6 flex items-start gap-3" style="background:rgba(1,169,219,0.04);border:1px solid rgba(1,169,219,0.1);">
             <span style="font-size:18px;line-height:1;">&#9889;</span>
             <div>
-              <p class="text-xs font-semibold text-white mb-1">1 Credit = 1 Tailored Resume</p>
-              <p class="text-[11px]" style="color:var(--text-dim)">{{ creditStore.dailyFreeTotal }} free daily. Buy more when you need them. Credits never expire.</p>
+              <p class="text-xs font-semibold text-white mb-1">Credits remain available in the product</p>
+              <p class="text-[11px]" style="color:var(--text-dim)">AI generation now uses your own Gemini API key from Settings. This page still handles purchases, promo codes, and existing balances.</p>
             </div>
           </div>
 
@@ -4931,6 +4968,167 @@ const CreditHistoryPage = {
   },
 };
 
+const SettingsPage = {
+  template: `
+    <div>
+      <TopHeader>
+        <template #left>
+          <div>
+            <h1 class="text-sm font-bold text-white font-mono tracking-tight">SETTINGS</h1>
+            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your Gemini API key and default model</p>
+          </div>
+        </template>
+      </TopHeader>
+      <div class="flex-1 overflow-y-auto p-4 md:p-6 page-scroll">
+        <div class="max-w-4xl mx-auto space-y-6">
+          <div class="widget-card p-6" :style="{ borderLeft: auth.hasAISettings ? '3px solid var(--green)' : '3px solid var(--orange)' }">
+            <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
+              <div>
+                <p class="text-white font-semibold mb-1">{{ auth.hasAISettings ? 'Gemini is configured' : 'Gemini setup required' }}</p>
+                <p class="text-xs" style="color:var(--text-dim)">All AI-backed features in ATS Beater use your saved Gemini API key and the selected model below.</p>
+              </div>
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn-ghost text-xs whitespace-nowrap">GET API KEY</a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+              <div class="rounded-lg p-4" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
+                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Status</p>
+                <p class="text-sm font-semibold" :style="{ color: auth.hasAISettings ? 'var(--green)' : 'var(--orange)' }">{{ auth.hasAISettings ? 'Configured' : 'Not configured' }}</p>
+              </div>
+              <div class="rounded-lg p-4" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
+                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Saved Key</p>
+                <p class="text-sm font-mono text-white">{{ aiStore.maskedApiKey || 'None saved' }}</p>
+              </div>
+              <div class="rounded-lg p-4" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
+                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Model</p>
+                <p class="text-sm font-mono text-white">{{ aiStore.selectedModel || 'Not selected' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="widget-card p-6">
+            <div class="section-label mb-4">Gemini Configuration</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="kpi-label block mb-1">Gemini API Key</label>
+                <input v-model="apiKey" type="password" class="input-field input-mono" :placeholder="aiStore.hasAISettings ? 'Leave blank to keep current key' : 'Paste your Gemini API key'" />
+                <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">
+                  {{ aiStore.hasAISettings ? 'Leave blank if you only want to change the model.' : 'Your key is encrypted at rest before it is stored.' }}
+                </p>
+              </div>
+              <div>
+                <label class="kpi-label block mb-1">Default Model</label>
+                <select v-model="modelName" class="input-field input-mono">
+                  <option v-for="model in aiStore.allowedModels" :key="model" :value="model">{{ model }}</option>
+                </select>
+                <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">
+                  One saved model is used for profile structuring, roast, tailoring, and chat.
+                </p>
+              </div>
+            </div>
+            <div class="rounded-lg p-4 mt-4" style="background:rgba(1,169,219,0.04);border:1px solid rgba(1,169,219,0.12);">
+              <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--teal)">Validation</p>
+              <p class="text-xs" style="color:var(--text-dim)">
+                We validate the API key against the selected model before saving it. Last verified:
+                <span class="text-white font-mono">{{ aiStore.validatedAt ? formatDate(aiStore.validatedAt, { includeYear: true, includeTime: true }) : 'Never' }}</span>
+              </p>
+            </div>
+            <p v-if="message" class="text-xs mt-4 font-mono" :style="{ color: messageError ? 'var(--red)' : 'var(--green)' }">{{ message }}</p>
+            <div class="flex items-center justify-end gap-3 mt-5">
+              <button v-if="aiStore.hasAISettings" @click="removeSettings" class="btn-ghost danger" :disabled="aiStore.saving">REMOVE KEY</button>
+              <button @click="saveSettings" class="btn-primary text-xs" :disabled="saveDisabled || aiStore.saving">
+                <span v-if="aiStore.saving" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+                {{ aiStore.saving ? 'VALIDATING...' : 'SAVE SETTINGS' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="widget-card p-6">
+            <div class="section-label mb-4">Supported Models</div>
+            <div class="space-y-2">
+              <div v-for="model in aiStore.allowedModels" :key="'supported-'+model" class="rounded-lg px-4 py-3 font-mono text-xs text-white" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
+                {{ model }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    const auth = useAuthStore();
+    const aiStore = useAISettingsStore();
+    const apiKey = ref('');
+    const modelName = ref('');
+    const message = ref('');
+    const messageError = ref(false);
+
+    const syncForm = () => {
+      modelName.value = aiStore.selectedModel || aiStore.allowedModels[0] || '';
+    };
+
+    onMounted(async () => {
+      try {
+        await aiStore.fetchSettings();
+        syncForm();
+      } catch (e) {
+        message.value = e.message;
+        messageError.value = true;
+      }
+    });
+
+    const saveDisabled = computed(() => {
+      if (!modelName.value) return true;
+      if (!aiStore.hasAISettings) return !apiKey.value.trim();
+      return !apiKey.value.trim() && modelName.value === aiStore.selectedModel;
+    });
+
+    const saveSettings = async () => {
+      message.value = '';
+      messageError.value = false;
+      const payload = {};
+      if (apiKey.value.trim()) payload.api_key = apiKey.value.trim();
+      if (modelName.value) payload.model_name = modelName.value;
+      try {
+        const result = await aiStore.saveSettings(payload);
+        await auth.fetchMe();
+        auth.setAIStatus(result);
+        apiKey.value = '';
+        syncForm();
+        message.value = 'Gemini settings saved successfully.';
+      } catch (e) {
+        message.value = e.message;
+        messageError.value = true;
+      }
+    };
+
+    const removeSettings = async () => {
+      const confirmed = await showConfirm({
+        title: 'Remove Gemini Key',
+        message: 'This removes your saved Gemini API key and disables AI features until you add a new one.',
+        confirmLabel: 'REMOVE',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+
+      message.value = '';
+      messageError.value = false;
+      try {
+        const result = await aiStore.deleteSettings();
+        await auth.fetchMe();
+        auth.setAIStatus(result);
+        apiKey.value = '';
+        syncForm();
+        message.value = 'Gemini settings removed.';
+      } catch (e) {
+        message.value = e.message;
+        messageError.value = true;
+      }
+    };
+
+    return { auth, aiStore, apiKey, modelName, message, messageError, saveDisabled, saveSettings, removeSettings, formatDate };
+  },
+};
+
 // ================================================================
 // SHARED COMPONENT — Chat Panel (used by Job + Profile detail pages)
 // ================================================================
@@ -4963,7 +5161,11 @@ const ChatPanel = {
         </div>
       </div>
       <div class="chat-input-area">
-        <div v-if="!messages.length && !loadingHistory && !sending && !pendingResponse" style="margin-bottom:10px;">
+        <div v-if="!auth.hasAISettings" class="mb-3 p-3 rounded-lg" style="background:rgba(251,65,0,0.08);border:1px solid rgba(251,65,0,0.2);">
+          <p class="text-[11px] font-mono font-bold mb-1" style="color:var(--orange)">GEMINI SETUP REQUIRED</p>
+          <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and model in <router-link to="/settings" style="color:var(--teal)">Settings</router-link> to use chat editing.</p>
+        </div>
+        <div v-if="auth.hasAISettings && !messages.length && !loadingHistory && !sending && !pendingResponse" style="margin-bottom:10px;">
           <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:1.5px;color:var(--text-dim);margin-bottom:8px;">TRY ASKING</div>
           <div class="chat-starters">
             <button v-for="p in starterPrompts" :key="p" class="chat-starter-btn" @click="sendStarter(p)">
@@ -4973,8 +5175,8 @@ const ChatPanel = {
           </div>
         </div>
         <div style="display:flex;gap:8px;">
-          <textarea v-model="input" @keydown.enter.exact.prevent="send" rows="1" class="input-field" style="flex:1;resize:none;min-height:38px;max-height:120px;overflow-y:auto;" placeholder="Ask about your resume..." @input="autoResize"></textarea>
-          <button @click="send" class="btn-primary text-xs" style="padding:8px 14px;" :disabled="!input.trim() || sending || pendingResponse">SEND</button>
+          <textarea v-model="input" @keydown.enter.exact.prevent="send" rows="1" class="input-field" style="flex:1;resize:none;min-height:38px;max-height:120px;overflow-y:auto;" :placeholder="auth.hasAISettings ? 'Ask about your resume...' : 'Configure Gemini in Settings to chat...'" @input="autoResize" :disabled="!auth.hasAISettings"></textarea>
+          <button @click="send" class="btn-primary text-xs" style="padding:8px 14px;" :disabled="!auth.hasAISettings || !input.trim() || sending || pendingResponse">SEND</button>
         </div>
         <div v-if="error" class="text-xs mt-2" style="color:var(--red);">{{ error }}</div>
         <button v-if="pendingResend && !pendingResponse && !sending" @click="resend" class="btn-primary text-xs mt-2" style="padding:6px 14px;background:var(--orange);color:#fff;">RESEND LAST MESSAGE</button>
@@ -4982,6 +5184,7 @@ const ChatPanel = {
     </div>
   `,
   setup(props, { emit }) {
+    const auth = useAuthStore();
     const messages = ref([]);
     const input = ref('');
     const sending = ref(false);
@@ -5146,7 +5349,7 @@ const ChatPanel = {
           const prefix = props.entityType === 'job' ? 'jobs' : 'profiles';
           const data = await api.get(`/${prefix}/${props.entityId}/chat/history`);
           const { msgs, pendingTools } = processHistory(data.messages || []);
-          // Update tool indicators as they appear in the ADK session
+          // Update tool indicators as they appear in persisted chat history
           activeTools.value = pendingTools;
           if (msgs.length && msgs[msgs.length - 1].role === 'assistant') {
             messages.value = msgs;
@@ -5174,6 +5377,7 @@ const ChatPanel = {
     };
 
     const send = async (opts = {}) => {
+      if (!auth.hasAISettings) return;
       const text = opts.text || input.value.trim();
       if (!text || sending.value) return;
       error.value = null;
@@ -5271,7 +5475,7 @@ const ChatPanel = {
     onMounted(loadHistory);
     onUnmounted(() => stopPendingPoll());
 
-    return { messages, input, sending, error, loadingHistory, messagesEl, activeTools, starterPrompts, scrollToBottom, autoResize, formatMessage, send, sendStarter, pendingResponse, pendingResend, resend };
+    return { auth, messages, input, sending, error, loadingHistory, messagesEl, activeTools, starterPrompts, scrollToBottom, autoResize, formatMessage, send, sendStarter, pendingResponse, pendingResend, resend };
   },
 };
 
@@ -5290,6 +5494,7 @@ const routes = [
       { path: 'jobs/new', component: JobCreatePage },
       { path: 'jobs/view', component: JobDetailPage },
       { path: 'roast', component: RoastPage },
+      { path: 'settings', component: SettingsPage },
       { path: 'credits', component: CreditHistoryPage },
       { path: 'admin', component: AdminPage, meta: { requiresSuperAdmin: true } },
     ],

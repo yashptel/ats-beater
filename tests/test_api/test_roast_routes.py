@@ -45,3 +45,13 @@ async def test_get_roast_not_found(client):
 async def test_get_roast_status_not_found(client):
     response = await client.get("/roasts/999/status")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_roast_requires_ai_settings(client):
+    response = await client.post(
+        "/roasts/upload",
+        files={"file": ("resume.pdf", b"%PDF-1.4 roast", "application/pdf")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "ai_setup_required"

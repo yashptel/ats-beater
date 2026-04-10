@@ -24,7 +24,10 @@ class PersonInfo(BaseModel):
 async def test_gemini_plain_text():
     """Verify Gemini can return a plain text response."""
     settings = get_settings()
-    llm = GeminiInference(model_name=settings.GEMINI_FLASH_MODEL)
+    llm = GeminiInference(
+        api_key=settings.GEMINI_API_KEY,
+        model_name=settings.GEMINI_FLASH_MODEL,
+    )
 
     result = await llm.run_inference(
         system_prompt="You are a helpful assistant. Reply briefly.",
@@ -40,7 +43,10 @@ async def test_gemini_plain_text():
 async def test_gemini_structured_output():
     """Verify Gemini can return structured JSON output matching a Pydantic schema."""
     settings = get_settings()
-    llm = GeminiInference(model_name=settings.GEMINI_FLASH_MODEL)
+    llm = GeminiInference(
+        api_key=settings.GEMINI_API_KEY,
+        model_name=settings.GEMINI_FLASH_MODEL,
+    )
 
     result = await llm.run_inference(
         system_prompt="You generate structured data. Always respond in JSON matching the schema.",
@@ -59,7 +65,10 @@ async def test_gemini_structured_output():
 async def test_gemini_structured_output_complex():
     """Verify Gemini handles a more complex schema with lists and optionals."""
     settings = get_settings()
-    llm = GeminiInference(model_name=settings.GEMINI_FLASH_MODEL)
+    llm = GeminiInference(
+        api_key=settings.GEMINI_API_KEY,
+        model_name=settings.GEMINI_FLASH_MODEL,
+    )
 
     result = await llm.run_inference(
         system_prompt="You extract person information from text. Respond as JSON.",

@@ -14,7 +14,7 @@ from app.services.latex.builder import build_resume
 from app.services.latex.compiler import compile_latex
 from app.services.latex.sanitizer import sanitize_special_chars
 from app.services.storage.gcs import GCSClient
-from app.config import get_settings
+from app.services.ai.user_settings import AISettingsService
 from app.exceptions import JobNotFoundError, ProfileNotFoundError
 from logging import getLogger
 
@@ -64,8 +64,7 @@ async def _background_gcs_upload(pdf_bytes: bytes, user_id: str, job_id: int) ->
 
 class JobService:
     def __init__(self):
-        settings = get_settings()
-        self.pro_model = settings.GEMINI_PRO_MODEL
+        self.ai_settings_service = AISettingsService()
 
     async def create_job(
         self,
@@ -115,7 +114,11 @@ class JobService:
             )
 
             t0 = time.monotonic()
-            llm = GeminiInference(model_name=self.pro_model)
+            ai_settings = await self.ai_settings_service.resolve_for_user(db, user_id)
+            llm = GeminiInference(
+                api_key=ai_settings.api_key,
+                model_name=ai_settings.model_name,
+            )
             result = await llm.run_inference(
                 system_prompt=CUSTOM_RESUME_SYSTEM_PROMPT,
                 inputs=[user_prompt],
@@ -125,7 +128,7 @@ class JobService:
                 reference_id=str(job_id),
             )
             ai_ms = int((time.monotonic() - t0) * 1000)
-            logger.info(f"[job:{job_id}] AI tailoring ({self.pro_model}): {ai_ms}ms {'(SLOW >60s)' if ai_ms > 60000 else ''}")
+            logger.info(f"[job:{job_id}] AI tailoring ({ai_settings.model_name}): {ai_ms}ms {'(SLOW >60s)' if ai_ms > 60000 else ''}")
 
             # Inject PII from profile
             resume_info = profile.resume_info or {}

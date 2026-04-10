@@ -1,14 +1,18 @@
+from datetime import datetime, timezone
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.models.base import Base
-from app.models import user, profile, job, token_usage, tenant, roast, roast_view, credit  # noqa: F401  # imports ensure all models registered
+from app.models import user, profile, job, token_usage, tenant, roast, roast_view, credit, ai_settings, chat_message  # noqa: F401  # imports ensure all models registered
 from app.main import create_app
 from app.database.session import get_db
 from app.dependencies import get_current_user, get_super_admin
+from app.models.ai_settings import UserAISettings
 from app.models.user import User
+from app.services.ai.user_settings import AISettingsService
 
 
 @pytest_asyncio.fixture
@@ -75,6 +79,22 @@ async def client(async_engine, test_user):
         chat_mod.async_session_factory = orig_chat_factory
     if orig_pchat_factory is not None:
         pchat_mod.async_session_factory = orig_pchat_factory
+
+
+@pytest_asyncio.fixture
+async def configured_ai_settings(db_session, test_user):
+    service = AISettingsService()
+    row = UserAISettings(
+        user_id=test_user.id,
+        encrypted_api_key=service.encrypt_api_key("test-gemini-key-1234"),
+        api_key_last4="1234",
+        model_name=service.allowed_models[0],
+        validated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row)
+    return row
 
 
 @pytest_asyncio.fixture

@@ -11,7 +11,9 @@ from app.database.session import get_db, async_session_factory
 from app.models.user import User
 from app.models.profile import Profile, ProfileStatus
 from app.dependencies import get_current_user
+from app.services.ai.user_settings import AISettingsService
 from app.services.chat.profile_chat import ProfileChatService
+from app.services.chat.history import append_text_message, append_tool_call
 from app.services.profile.service import ProfileService
 from app.exceptions import BadRequestError
 from logging import getLogger
@@ -21,6 +23,7 @@ logger = getLogger(__name__)
 router = APIRouter(prefix="/profiles", tags=["profile-chat"])
 profile_chat_service = ProfileChatService()
 profile_service = ProfileService()
+ai_settings_service = AISettingsService()
 
 # In-flight agent tasks: task_key → (asyncio.Task, asyncio.Queue)
 _active_tasks: dict[str, tuple[asyncio.Task, asyncio.Queue]] = {}
@@ -39,6 +42,7 @@ async def chat_with_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await ai_settings_service.require_settings(db, current_user.id)
     profile = await profile_service.get_profile(db, profile_id, current_user.id)
 
     if profile.status != ProfileStatus.READY:
@@ -50,7 +54,8 @@ async def chat_with_profile(
         raise BadRequestError("No resume data available for this profile")
 
     # Prepend client datetime/timezone as context for the AI (not shown in chat)
-    message = body.message
+    raw_message = body.message
+    message = raw_message
     if body.client_datetime:
         ctx = f"[User's current time: {body.client_datetime}"
         if body.client_timezone:
@@ -88,12 +93,35 @@ async def chat_with_profile(
         try:
             async with async_session_factory() as task_db:
                 try:
+                    ai_settings = await ai_settings_service.resolve_for_user(
+                        task_db, _user_id
+                    )
+                    await append_text_message(
+                        task_db,
+                        user_id=_user_id,
+                        entity_type="profile",
+                        entity_id=_profile_id,
+                        role="user",
+                        content=raw_message,
+                    )
                     async for event_data in profile_chat_service.chat_stream(
                         profile_id=_profile_id,
                         user_id=_user_id,
                         message=_message,
                         current_profile=_current_profile,
+                        api_key=ai_settings.api_key,
+                        model_name=ai_settings.model_name,
                     ):
+                        if event_data.get("type") == "tool_call":
+                            await append_tool_call(
+                                task_db,
+                                user_id=_user_id,
+                                entity_type="profile",
+                                entity_id=_profile_id,
+                                tool_name=event_data["name"],
+                                label=event_data["label"],
+                            )
+
                         if (event_data.get("type") == "response"
                                 and event_data.get("resume_modified")
                                 and event_data.get("resume_info")):
@@ -103,6 +131,15 @@ async def chat_with_profile(
                                 )
                             )
                             await task_db.commit()
+                        if event_data.get("type") == "response":
+                            await append_text_message(
+                                task_db,
+                                user_id=_user_id,
+                                entity_type="profile",
+                                entity_id=_profile_id,
+                                role="model",
+                                content=event_data.get("response", ""),
+                            )
 
                         await queue.put(event_data)
                 except Exception as e:
@@ -142,5 +179,5 @@ async def get_profile_chat_history(
 ):
     # Verify profile ownership
     await profile_service.get_profile(db, profile_id, current_user.id)
-    messages = await profile_chat_service.get_history(profile_id, current_user.id)
+    messages = await profile_chat_service.get_history(db, profile_id, current_user.id)
     return {"messages": messages}

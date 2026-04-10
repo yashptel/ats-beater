@@ -59,13 +59,20 @@ def _parse_sse(text: str) -> list[dict]:
 
 
 @pytest.mark.asyncio
-async def test_chat_profile_not_found(client):
+async def test_chat_profile_requires_ai_settings(client):
+    response = await client.post("/profiles/999/chat", json={"message": "hello"})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "ai_setup_required"
+
+
+@pytest.mark.asyncio
+async def test_chat_profile_not_found(client, configured_ai_settings):
     response = await client.post("/profiles/999/chat", json={"message": "hello"})
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_chat_profile_not_ready(client, pending_profile):
+async def test_chat_profile_not_ready(client, pending_profile, configured_ai_settings):
     response = await client.post(
         f"/profiles/{pending_profile.id}/chat", json={"message": "hello"}
     )
@@ -74,7 +81,7 @@ async def test_chat_profile_not_ready(client, pending_profile):
 
 
 @pytest.mark.asyncio
-async def test_chat_profile_no_resume_info(client, db_session, test_user):
+async def test_chat_profile_no_resume_info(client, db_session, test_user, configured_ai_settings):
     profile = Profile(
         user_id=test_user.id,
         status=ProfileStatus.READY,
@@ -92,7 +99,7 @@ async def test_chat_profile_no_resume_info(client, db_session, test_user):
 
 
 @pytest.mark.asyncio
-async def test_chat_message_empty(client, ready_profile):
+async def test_chat_message_empty(client, ready_profile, configured_ai_settings):
     response = await client.post(
         f"/profiles/{ready_profile.id}/chat", json={"message": ""}
     )
@@ -100,7 +107,7 @@ async def test_chat_message_empty(client, ready_profile):
 
 
 @pytest.mark.asyncio
-async def test_chat_message_too_long(client, ready_profile):
+async def test_chat_message_too_long(client, ready_profile, configured_ai_settings):
     response = await client.post(
         f"/profiles/{ready_profile.id}/chat", json={"message": "x" * 2001}
     )
@@ -108,7 +115,7 @@ async def test_chat_message_too_long(client, ready_profile):
 
 
 @pytest.mark.asyncio
-async def test_chat_success_no_modification(client, ready_profile):
+async def test_chat_success_no_modification(client, db_session, ready_profile, configured_ai_settings):
     async def mock_stream(**kwargs):
         yield {
             "type": "response",
@@ -131,9 +138,17 @@ async def test_chat_success_no_modification(client, ready_profile):
     assert events[0]["response"] == "Your profile looks great!"
     assert events[0]["resume_modified"] is False
 
+    history_response = await client.get(f"/profiles/{ready_profile.id}/chat/history")
+    assert history_response.status_code == 200
+    history = history_response.json()["messages"]
+    assert history[0]["role"] == "user"
+    assert history[0]["content"] == "show me my skills"
+    assert history[1]["role"] == "model"
+    assert history[1]["content"] == "Your profile looks great!"
+
 
 @pytest.mark.asyncio
-async def test_chat_success_with_modification(client, db_session, ready_profile):
+async def test_chat_success_with_modification(client, db_session, ready_profile, configured_ai_settings):
     updated_info = {
         **SAMPLE_RESUME_INFO,
         "skills": [
@@ -172,6 +187,17 @@ async def test_chat_success_with_modification(client, db_session, ready_profile)
     await db_session.refresh(ready_profile)
     assert len(ready_profile.resume_info["skills"]) == 2
     assert ready_profile.resume_info["skills"][1]["name"] == "Go"
+
+    history_response = await client.get(f"/profiles/{ready_profile.id}/chat/history")
+    assert history_response.status_code == 200
+    history = history_response.json()["messages"]
+    assert history[0]["role"] == "user"
+    assert history[1]["type"] == "tool_call"
+    assert history[1]["name"] == "get_profile"
+    assert history[2]["type"] == "tool_call"
+    assert history[2]["name"] == "edit_profile"
+    assert history[3]["role"] == "model"
+    assert history[3]["content"] == "Added Go to your Programming skills."
 
 
 # ── GET /profiles/{id}/chat/history ──────────────────────────────────

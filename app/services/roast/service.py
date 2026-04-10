@@ -11,25 +11,23 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from pdf2image import convert_from_bytes
 
-from app.config import get_settings
 from app.exceptions import RoastNotFoundError
 from app.models.roast import Roast, RoastStatus
 from app.schemas.roast import RoastResult
 from app.services.ai.inference import GeminiInference
 from app.services.ai.prompts import ROAST_SYSTEM_PROMPT
 from app.services.ocr.extractor import PDFExtractor
+from app.services.ai.user_settings import AISettingsService
 
 logger: Logger = getLogger(__name__)
 
 
 class RoastService:
     extractor: PDFExtractor
-    flash_model: str
 
     def __init__(self) -> None:
         self.extractor = PDFExtractor()
-        settings = get_settings()
-        self.flash_model = settings.GEMINI_FLASH_MODEL
+        self.ai_settings_service = AISettingsService()
 
     @staticmethod
     def compute_hash(pdf_bytes: bytes) -> str:
@@ -97,7 +95,13 @@ class RoastService:
             images: list[dict[str, Any]] = await self.pdf_to_images(pdf_bytes)
 
             now: str = datetime.now(timezone.utc).strftime("%B %d, %Y")
-            llm: GeminiInference = GeminiInference(model_name=self.flash_model)
+            ai_settings = await self.ai_settings_service.resolve_for_user(
+                db, roast.user_id
+            )
+            llm: GeminiInference = GeminiInference(
+                api_key=ai_settings.api_key,
+                model_name=ai_settings.model_name,
+            )
 
             user_message_parts: list[Any] = [
                 f"Today's date is {now}. Here is the resume to roast. Examine each page — look at both the content AND the formatting/layout.",

@@ -6,12 +6,9 @@ from typing import Type
 from pydantic import BaseModel, ValidationError
 from google import genai
 from google.genai import types
-from app.config import get_settings
 from app.services.ai.retry import retry_decor
 
-# If primary model exceeds this, immediately fall back to FALLBACK_MODEL.
 PRIMARY_TIMEOUT_SECONDS = 60
-FALLBACK_MODEL = "gemini-2.5-pro"
 
 logger = getLogger(__name__)
 
@@ -60,10 +57,9 @@ async def _log_request(
 
 
 class GeminiInference:
-    def __init__(self, model_name: str | None = None):
-        settings = get_settings()
-        self.model = model_name or settings.GEMINI_FLASH_MODEL
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    def __init__(self, *, api_key: str, model_name: str):
+        self.model = model_name
+        self.client = genai.Client(api_key=api_key)
 
     def parse_output(
         self,
@@ -193,7 +189,6 @@ class GeminiInference:
         purpose: str | None = None,
         reference_id: str | None = None,
         thinking_level: str = "LOW",
-        fallback_model: str | None = FALLBACK_MODEL,
         primary_timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
     ) -> str | dict | list:
         config_params: dict = {
@@ -217,43 +212,15 @@ class GeminiInference:
         call_kwargs = dict(user_id=user_id, purpose=purpose, reference_id=reference_id)
 
         async def _get_response():
-            """Primary → retry → fallback flow."""
-            # Strip thinking_config for fallback — Gemini 2.5 uses thinking_budget,
-            # not thinking_level; passing the wrong one may cause an API error.
-            fallback_params = {k: v for k, v in config_params.items() if k != "thinking_config"}
-
             try:
                 return await self._call_api(
                     self.model, config_params, inputs,
                     timeout=primary_timeout, **call_kwargs,
                 )
-            except asyncio.TimeoutError:
-                if not fallback_model or fallback_model == self.model:
-                    raise
-                logger.warning(
-                    f"Primary model {self.model} timed out at {primary_timeout}s, "
-                    f"falling back to {fallback_model}"
-                )
-                return await self._call_api_with_retry(
-                    fallback_model, fallback_params, inputs, **call_kwargs,
-                )
             except Exception:
-                # Non-timeout errors (429, 503, network): retry with primary model first
-                try:
-                    return await self._call_api_with_retry(
-                        self.model, config_params, inputs, **call_kwargs,
-                    )
-                except Exception:
-                    # Primary retries exhausted — fall back
-                    if not fallback_model or fallback_model == self.model:
-                        raise
-                    logger.warning(
-                        f"Primary model {self.model} retries exhausted, "
-                        f"falling back to {fallback_model}"
-                    )
-                    return await self._call_api_with_retry(
-                        fallback_model, fallback_params, inputs, **call_kwargs,
-                    )
+                return await self._call_api_with_retry(
+                    self.model, config_params, inputs, **call_kwargs,
+                )
 
         # Retry on schema validation failures — the AI returned valid JSON but it
         # doesn't conform to the Pydantic schema. Re-calling gives the model a

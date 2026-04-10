@@ -21,6 +21,8 @@ from app.exceptions import (
     NotFoundError,
     BadRequestError,
     ConflictError,
+    AISettingsRequiredError,
+    InvalidAISettingsError,
 )
 
 logger = logging.getLogger(__name__)
@@ -190,6 +192,26 @@ def create_app() -> FastAPI:
     @app.exception_handler(ConflictError)
     async def conflict_error_handler(request: Request, exc: ConflictError):
         return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(AISettingsRequiredError)
+    async def ai_settings_required_handler(request: Request, exc: AISettingsRequiredError):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "ai_setup_required",
+                "message": "Add your Gemini API key in Settings before using AI features.",
+            },
+        )
+
+    @app.exception_handler(InvalidAISettingsError)
+    async def invalid_ai_settings_handler(request: Request, exc: InvalidAISettingsError):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "invalid_ai_settings",
+                "message": str(exc) or "The Gemini API key or model is invalid.",
+            },
+        )
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError):

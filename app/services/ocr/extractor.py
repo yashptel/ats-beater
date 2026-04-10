@@ -6,17 +6,12 @@ from pdf2image import convert_from_bytes
 from app.services.ai.inference import GeminiInference
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT
 from app.schemas.resume import ResumeInfo
-from app.config import get_settings
 from logging import getLogger
 
 logger = getLogger(__name__)
 
 
 class PDFExtractor:
-    def __init__(self):
-        settings = get_settings()
-        self.flash_model = settings.GEMINI_FLASH_MODEL
-
     def extract_text(self, pdf_bytes: bytes) -> str:
         """Fast extraction using pdfplumber without LLM."""
         texts = []
@@ -32,6 +27,8 @@ class PDFExtractor:
         self,
         pdf_bytes: bytes,
         *,
+        api_key: str,
+        model_name: str,
         user_id: str | None = None,
         reference_id: str | None = None,
     ) -> dict:
@@ -46,7 +43,7 @@ class PDFExtractor:
             b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
             images.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
 
-        llm = GeminiInference(model_name=self.flash_model)
+        llm = GeminiInference(api_key=api_key, model_name=model_name)
         result = await llm.run_inference(
             system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
             inputs=[

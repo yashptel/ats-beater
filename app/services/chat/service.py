@@ -4,49 +4,54 @@ from logging import getLogger
 from typing import Any, AsyncGenerator
 
 import jsonpatch
-from pydantic import ValidationError
-from google.adk.agents import Agent
-from google.adk.runners import Runner
-from google.adk.sessions import DatabaseSessionService
-from google.adk.tools import ToolContext
+from google import genai
 from google.genai import types
+from pydantic import ValidationError
 
-from app.config import get_settings
 from app.schemas.custom_resume import CustomResumeInfo
 from app.services.ai.inference import _log_request
+from app.services.chat.history import load_history
 
 logger = getLogger(__name__)
 
-APP_NAME = "ats-beater-chat"
 
-# ── Agent tools (module-level functions) ────────────────────────────────
-
-
-def get_resume(tool_context: ToolContext) -> dict:
-    """Read the current tailored resume. Call this to see the resume before making changes."""
-    return tool_context.state.get("resume", {})
+def get_resume(resume: dict) -> dict:
+    """Read the current tailored resume."""
+    return resume
 
 
-def edit_resume(operations: list[dict], tool_context: ToolContext) -> dict:
-    """Apply changes to the resume using JSON Patch (RFC 6902).
+def _extract_operations(tool_args: dict[str, Any]) -> list[dict]:
+    if isinstance(tool_args.get("operations"), list):
+        return tool_args["operations"]
 
-    Args:
-        operations: List of patch ops. Each has: op ("replace"/"add"/"remove"),
-                    path (JSON pointer like "/past_experience/0/description/0"),
-                    value (new value, not needed for "remove").
-    """
-    current = tool_context.state.get("resume", {})
+    raw_operations = tool_args.get("operations_json")
+    if isinstance(raw_operations, list):
+        return raw_operations
+    if isinstance(raw_operations, str):
+        parsed = json.loads(raw_operations)
+        if isinstance(parsed, list):
+            return parsed
+    raise ValueError("edit_resume requires operations_json as a JSON array")
+
+
+def edit_resume(tool_args: dict[str, Any], resume: dict) -> tuple[dict, dict]:
+    """Apply JSON Patch operations to the current tailored resume."""
     try:
+        operations = _extract_operations(tool_args)
         patch = jsonpatch.JsonPatch(operations)
-        updated = patch.apply(current)
+        updated = patch.apply(resume)
         validated = CustomResumeInfo.model_validate(updated)
-        tool_context.state["resume"] = validated.model_dump()
-        return {"status": "success", "changes_applied": len(operations)}
-    except (jsonpatch.JsonPatchException, ValidationError) as e:
-        return {"status": "error", "message": str(e)}
+        new_resume = validated.model_dump()
+        return (
+            {"status": "success", "changes_applied": len(operations)},
+            new_resume,
+        )
+    except (ValueError, json.JSONDecodeError, jsonpatch.JsonPatchException, ValidationError) as exc:
+        return (
+            {"status": "error", "message": str(exc)},
+            resume,
+        )
 
-
-# ── System prompt template ──────────────────────────────────────────────
 
 CHAT_SYSTEM_PROMPT = """You are a resume editing assistant. The user has a tailored resume for a specific job.
 Help them refine it through conversation.
@@ -75,10 +80,11 @@ Sections appear in this fixed order (empty sections are automatically omitted):
 to bold in the PDF. No other markdown is supported.
 
 ## Your Tools
-- get_resume: Read the current tailored resume. Call this first if you need to see the current state.
-- edit_resume: Apply changes using JSON Patch (RFC 6902) operations.
-  Supported ops: "replace", "add", "remove"
-  Example: [{{"op": "replace", "path": "/past_experience/0/description/0", "value": "New bullet text"}}]
+- `get_resume`: Read the current tailored resume. Call this first if you need to see the current state.
+- `edit_resume`: Apply JSON Patch (RFC 6902) operations by passing `operations_json`, a JSON string containing
+  an array of patch operations.
+  Example:
+  `[{"op":"replace","path":"/past_experience/0/description/0","value":"Built **X** with **Y**"}]`
 
 ## Resume Structure (CustomResumeInfo)
 - /name, /email, /mobile_number, /date_of_birth — personal info
@@ -154,16 +160,11 @@ NEVER give a number. If the user insists on a score, firmly explain why scores d
 """
 
 
-# ── ChatService ─────────────────────────────────────────────────────────
-
-
 class ChatService:
-    def __init__(self):
-        settings = get_settings()
-        self.session_service = DatabaseSessionService(
-            db_url=settings.DATABASE_URL
-        )
-        self.flash_model = settings.GEMINI_FLASH_MODEL
+    _TOOL_LABELS = {
+        "get_resume": "Reading resume...",
+        "edit_resume": "Editing resume...",
+    }
 
     def _build_system_prompt(self, job_description: dict, profile_info: dict) -> str:
         return CHAT_SYSTEM_PROMPT.format(
@@ -171,112 +172,115 @@ class ChatService:
             profile_info_json=json.dumps(profile_info, indent=2),
         )
 
-    def _build_agent(
+    def _build_config(self, system_prompt: str) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.2,
+            tools=[
+                types.Tool(
+                    function_declarations=[
+                        types.FunctionDeclaration(
+                            name="get_resume",
+                            description="Read the current tailored resume before editing it.",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                        types.FunctionDeclaration(
+                            name="edit_resume",
+                            description=(
+                                "Apply JSON Patch operations to the current resume. "
+                                "Pass operations_json as a JSON array string."
+                            ),
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "operations_json": {
+                                        "type": "string",
+                                        "description": (
+                                            "A JSON string containing an array of RFC 6902 patch "
+                                            "operations. Example: "
+                                            "[{\"op\":\"replace\",\"path\":\"/achievements/0\",\"value\":\"New text\"}]"
+                                        ),
+                                    }
+                                },
+                                "required": ["operations_json"],
+                            },
+                        ),
+                    ]
+                )
+            ],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
+            thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+        )
+
+    def _extract_function_calls(self, response) -> list[Any]:
+        function_calls = list(getattr(response, "function_calls", []) or [])
+        if function_calls:
+            return function_calls
+
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return []
+        parts = getattr(candidates[0].content, "parts", None) or []
+        return [part.function_call for part in parts if getattr(part, "function_call", None)]
+
+    def _extract_model_content(self, response):
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return None
+        return getattr(candidates[0], "content", None)
+
+    async def _generate_content(
         self,
-        job_description: dict,
-        profile_info: dict,
+        *,
+        client: genai.Client,
+        model_name: str,
+        config: types.GenerateContentConfig,
+        contents: list[types.Content],
         user_id: str,
         job_id: int,
-    ) -> Agent:
-        system_prompt = self._build_system_prompt(job_description, profile_info)
-        model_name = self.flash_model
-        _job_id = job_id
-        _user_id = user_id
-
-        async def _after_model_callback(callback_context, llm_response):
-            """Log LLM call metrics to llm_requests table."""
-            usage = llm_response.usage_metadata
+    ):
+        t0 = time.monotonic()
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
             await _log_request(
                 model_name=model_name,
-                user_id=_user_id,
-                purpose="resume_chat_edit",
-                reference_id=str(_job_id),
-                input_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
-                output_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
-                total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
-                cached_tokens=getattr(usage, "cached_content_token_count", 0) if usage else 0,
-                response_time_ms=0,  # ADK doesn't expose per-call timing
-                success=True,
-                error_message=None,
-            )
-            return llm_response
-
-        return Agent(
-            model=self.flash_model,
-            name="resume_editor",
-            instruction=system_prompt,
-            tools=[get_resume, edit_resume],
-            after_model_callback=_after_model_callback,
-        )
-
-    async def chat(
-        self,
-        job_id: int,
-        user_id: str,
-        message: str,
-        job_description: dict,
-        profile_info: dict,
-        current_resume: dict,
-    ) -> dict[str, Any]:
-        session_id = f"job_chat_{job_id}"
-
-        agent = self._build_agent(job_description, profile_info, user_id, job_id)
-        runner = Runner(
-            agent=agent,
-            app_name=APP_NAME,
-            session_service=self.session_service,
-        )
-
-        # Get or create session
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        if not session:
-            session = await self.session_service.create_session(
-                app_name=APP_NAME,
                 user_id=user_id,
-                session_id=session_id,
-                state={"resume": current_resume},
+                purpose="resume_chat_edit",
+                reference_id=str(job_id),
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                cached_tokens=0,
+                response_time_ms=elapsed_ms,
+                success=False,
+                error_message=str(exc)[:500],
             )
-
-        new_message = types.Content(
-            role="user", parts=[types.Part.from_text(text=message)]
-        )
-
-        response_text = ""
-        resume_modified = False
-        t0 = time.monotonic()
-
-        async for event in runner.run_async(
-            user_id=user_id, session_id=session_id, new_message=new_message,
-        ):
-            if event.actions and event.actions.state_delta:
-                if "resume" in event.actions.state_delta:
-                    resume_modified = True
-            if event.is_final_response() and event.content:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
+            raise
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        logger.info(f"Chat turn for job {job_id}: {elapsed_ms}ms, modified={resume_modified}")
-
-        # Get updated resume from session state
-        updated_session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
+        usage = getattr(response, "usage_metadata", None)
+        await _log_request(
+            model_name=model_name,
+            user_id=user_id,
+            purpose="resume_chat_edit",
+            reference_id=str(job_id),
+            input_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
+            output_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
+            total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
+            cached_tokens=getattr(usage, "cached_content_token_count", 0) if usage else 0,
+            response_time_ms=elapsed_ms,
+            success=True,
+            error_message=None,
         )
-        updated_resume = updated_session.state.get("resume") if updated_session else None
-
-        return {
-            "response": response_text,
-            "resume_modified": resume_modified,
-            "custom_resume_data": updated_resume,
-        }
-
-    _TOOL_LABELS = {
-        "get_resume": "Reading resume...",
-        "edit_resume": "Editing resume...",
-    }
+        return response
 
     async def chat_stream(
         self,
@@ -286,94 +290,82 @@ class ChatService:
         job_description: dict,
         profile_info: dict,
         current_resume: dict,
+        *,
+        api_key: str,
+        model_name: str,
     ) -> AsyncGenerator[dict, None]:
-        """Like chat() but yields SSE-friendly events as they happen."""
-        session_id = f"job_chat_{job_id}"
+        system_prompt = self._build_system_prompt(job_description, profile_info)
+        config = self._build_config(system_prompt)
+        client = genai.Client(api_key=api_key)
 
-        agent = self._build_agent(job_description, profile_info, user_id, job_id)
-        runner = Runner(
-            agent=agent,
-            app_name=APP_NAME,
-            session_service=self.session_service,
-        )
-
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        if not session:
-            session = await self.session_service.create_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-                state={"resume": current_resume},
-            )
-
-        new_message = types.Content(
-            role="user", parts=[types.Part.from_text(text=message)]
-        )
-
-        response_text = ""
+        contents: list[types.Content] = [
+            types.Content(role="user", parts=[types.Part.from_text(text=message)])
+        ]
+        resume_state = current_resume
         resume_modified = False
-        t0 = time.monotonic()
 
-        async for event in runner.run_async(
-            user_id=user_id, session_id=session_id, new_message=new_message,
-        ):
-            # Detect tool calls and yield them
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        label = self._TOOL_LABELS.get(part.function_call.name, part.function_call.name)
-                        yield {"type": "tool_call", "name": part.function_call.name, "label": label}
+        for _ in range(6):
+            response = await self._generate_content(
+                client=client,
+                model_name=model_name,
+                config=config,
+                contents=contents,
+                user_id=user_id,
+                job_id=job_id,
+            )
+            function_calls = self._extract_function_calls(response)
+            if not function_calls:
+                yield {
+                    "type": "response",
+                    "response": (getattr(response, "text", "") or "").strip(),
+                    "resume_modified": resume_modified,
+                    "custom_resume_data": resume_state,
+                }
+                return
 
-            if event.actions and event.actions.state_delta:
-                if "resume" in event.actions.state_delta:
-                    resume_modified = True
+            model_content = self._extract_model_content(response)
+            if model_content:
+                contents.append(model_content)
 
-            if event.is_final_response() and event.content:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
+            function_responses = []
+            for function_call in function_calls:
+                label = self._TOOL_LABELS.get(function_call.name, function_call.name)
+                yield {
+                    "type": "tool_call",
+                    "name": function_call.name,
+                    "label": label,
+                }
 
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
-        logger.info(f"Chat turn for job {job_id}: {elapsed_ms}ms, modified={resume_modified}")
+                if function_call.name == "get_resume":
+                    result = get_resume(resume_state)
+                elif function_call.name == "edit_resume":
+                    result, updated_resume = edit_resume(function_call.args or {}, resume_state)
+                    if result.get("status") == "success":
+                        resume_state = updated_resume
+                        resume_modified = True
+                else:
+                    result = {"status": "error", "message": "Unknown tool"}
 
-        updated_session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
-        )
-        updated_resume = updated_session.state.get("resume") if updated_session else None
+                function_responses.append(
+                    types.Part.from_function_response(
+                        name=function_call.name,
+                        response={"result": result},
+                    )
+                )
+
+            contents.append(types.Content(role="user", parts=function_responses))
 
         yield {
             "type": "response",
-            "response": response_text,
+            "response": "I couldn't complete that edit cleanly. Please try a more specific request.",
             "resume_modified": resume_modified,
-            "custom_resume_data": updated_resume,
+            "custom_resume_data": resume_state,
         }
 
-    async def get_history(self, job_id: int, user_id: str) -> list[dict]:
-        session_id = f"job_chat_{job_id}"
-        session = await self.session_service.get_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id,
+    async def get_history(self, db, job_id: int, user_id: str) -> list[dict]:
+        return await load_history(
+            db,
+            user_id=user_id,
+            entity_type="job",
+            entity_id=job_id,
         )
-        if not session:
-            return []
-
-        messages = []
-        for event in session.events:
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        label = self._TOOL_LABELS.get(part.function_call.name, part.function_call.name)
-                        messages.append({
-                            "type": "tool_call",
-                            "name": part.function_call.name,
-                            "label": label,
-                            "timestamp": event.timestamp,
-                        })
-                    elif part.text:
-                        messages.append({
-                            "role": event.content.role,
-                            "content": part.text,
-                            "timestamp": event.timestamp,
-                        })
-        return messages

@@ -8,7 +8,7 @@ from app.schemas.resume import ResumeInfo
 from app.services.ocr.extractor import PDFExtractor
 from app.services.ai.inference import GeminiInference
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT, ENHANCED_RESUME_SYSTEM_PROMPT
-from app.config import get_settings
+from app.services.ai.user_settings import AISettingsService
 from app.exceptions import ProfileNotFoundError
 from logging import getLogger
 
@@ -18,8 +18,7 @@ logger = getLogger(__name__)
 class ProfileService:
     def __init__(self):
         self.extractor = PDFExtractor()
-        settings = get_settings()
-        self.flash_model = settings.GEMINI_FLASH_MODEL
+        self.ai_settings_service = AISettingsService()
 
     async def create_profile(self, db: AsyncSession, user_id: str, pdf_bytes: bytes) -> int:
         """Create profile row (PENDING), then extract and structure in background."""
@@ -69,14 +68,25 @@ class ProfileService:
             t0 = time.monotonic()
             if needs_vision:
                 logger.info(f"[profile:{profile_id}] Using vision path (text_len={len(text.strip())}, high_non_ascii={self.extractor._has_high_non_ascii_ratio(text)})")
+                ai_settings = await self.ai_settings_service.resolve_for_user(
+                    db, profile.user_id
+                )
                 result = await self.extractor.extract_and_structure_via_vision(
                     pdf_bytes,
+                    api_key=ai_settings.api_key,
+                    model_name=ai_settings.model_name,
                     user_id=profile.user_id,
                     reference_id=str(profile_id),
                 )
             else:
                 logger.info(f"[profile:{profile_id}] Using text path → AI structuring")
-                llm = GeminiInference(model_name=self.flash_model)
+                ai_settings = await self.ai_settings_service.resolve_for_user(
+                    db, profile.user_id
+                )
+                llm = GeminiInference(
+                    api_key=ai_settings.api_key,
+                    model_name=ai_settings.model_name,
+                )
                 result = await llm.run_inference(
                     system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
                     inputs=[text],
@@ -145,7 +155,11 @@ class ProfileService:
 
     async def enhance_profile(self, db: AsyncSession, profile_id: int, user_id: str) -> Profile:
         profile = await self.get_profile(db, profile_id, user_id)
-        llm = GeminiInference(model_name=self.flash_model)
+        ai_settings = await self.ai_settings_service.resolve_for_user(db, user_id)
+        llm = GeminiInference(
+            api_key=ai_settings.api_key,
+            model_name=ai_settings.model_name,
+        )
         result = await llm.run_inference(
             system_prompt=ENHANCED_RESUME_SYSTEM_PROMPT,
             inputs=[json.dumps(profile.resume_info or {})],
