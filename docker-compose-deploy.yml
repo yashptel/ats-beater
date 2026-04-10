@@ -19,6 +19,8 @@ services:
       RUN_MIGRATIONS: "true"
     depends_on:
       - postgres
+    networks:
+      - dokploy-network
 
 volumes:
   pgdata:
