@@ -8,13 +8,13 @@ services:
     # ports:
     #   - "5432:5432"
     volumes:
-      - pgdata-ro:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
   app:
-    image: imaddi47/resume-optimizer:latest
+    image: imaddi47/resume-optimizer:351ae0f
     # ports:
     #   - "8080:8080"
-    env_file:
-      - .env
+    # env_file:
+    #   - .env
     environment:
       RUN_MIGRATIONS: "true"
     depends_on:
@@ -23,7 +23,7 @@ services:
       - dokploy-network
 
 volumes:
-  pgdata-ro:
+  pgdata:
 
 networks:
   dokploy-network:
