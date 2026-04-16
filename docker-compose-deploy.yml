@@ -1,5 +1,5 @@
 services:
-  postgres:
+  postgres-resume:
     image: postgres:16
     environment:
       POSTGRES_USER: postgres
@@ -18,7 +18,7 @@ services:
     environment:
       RUN_MIGRATIONS: "true"
     depends_on:
-      - postgres
+      - postgres-resume
     networks:
       - dokploy-network
 
