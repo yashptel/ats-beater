@@ -9,6 +9,8 @@ services:
     #   - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - resume-op
   app:
     image: imaddi47/resume-optimizer:latest
     # ports:
@@ -20,11 +22,13 @@ services:
     depends_on:
       - postgres
     networks:
+      - resume-op
       - dokploy-network
 
 volumes:
   pgdata:
 
 networks:
+  resume-op:
   dokploy-network:
     external: true
