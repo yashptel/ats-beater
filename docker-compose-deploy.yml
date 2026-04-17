@@ -10,7 +10,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
   app:
-    image: imaddi47/resume-optimizer:351ae0f
+    build:
+      context: .
+      dockerfile: Dockerfile
     # ports:
     #   - "8080:8080"
     env_file:
