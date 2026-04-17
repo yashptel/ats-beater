@@ -3,7 +3,9 @@ from app.config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+# Pre-ping pooled connections so long-lived Cloud Run instances don't reuse
+# server-closed asyncpg connections after idle periods.
+engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
