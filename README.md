@@ -312,6 +312,24 @@ bash infra/deploy-cloudrun.sh
 
 The deploy script handles Artifact Registry, Docker build, push, and Cloud Run deployment. See `infra/deploy-cloudrun.sh` for details.
 
+### Dokploy
+
+Use `docker-compose-deploy.yml` with **Docker Compose** mode, not **Stack** mode. Dokploy Stack uses
+`docker stack deploy`, which ignores `build:` and requires prebuilt images from a registry.
+
+Recommended Dokploy setup:
+
+1. Set the compose type to `docker-compose`
+2. Set the compose path to `./docker-compose-deploy.yml`
+3. Add your runtime secrets in Dokploy's Environment tab
+4. Set `DATABASE_URL` to use the internal Postgres hostname:
+   `postgresql+asyncpg://postgres:postgres@postgres:5432/custom_resume_dev`
+5. Configure the public domain in Dokploy's **Domains** tab and target container port `8080`
+
+The Dokploy compose file intentionally keeps Postgres in the same deployment, waits for the database
+healthcheck before starting the app, and relies on Dokploy Domains UI for routing instead of manual
+Traefik labels in the repo.
+
 ### Environment
 
 All configuration is via environment variables. See `.env.example` for the full list.
