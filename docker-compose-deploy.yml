@@ -13,7 +13,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-  app:
+  app-resume:
     # Dokploy should use Docker Compose mode for this file so it can build
     # from the repository's Dockerfile instead of requiring a prebuilt image.
     build:
@@ -29,11 +29,11 @@ services:
       postgres-resume:
         condition: service_healthy
     networks:
-      - dokploy-network
+      - cloudflare-tunnel-network
 
 volumes:
   pgdata:
 
 networks:
-  dokploy-network:
+  cloudflare-tunnel-network:
     external: true
