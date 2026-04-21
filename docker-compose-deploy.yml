@@ -19,8 +19,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    expose:
-      - "8080"
+    # expose:
+    #   - "8080"
     env_file:
       - .env
     environment:
@@ -28,6 +28,8 @@ services:
     depends_on:
       postgres-resume:
         condition: service_healthy
+    networks:
+      - dokploy-network
 
 volumes:
   pgdata:
