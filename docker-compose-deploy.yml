@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: custom_resume_dev
     volumes:
-      - selfhostedtools-resumeoptimizer-fviidj_pgdata:/var/lib/postgresql/data
+      - selfhostedtools-resumeoptimzier-mg5uva_pgdata:/var/lib/postgresql/data
       # - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d custom_resume_dev"]
@@ -37,7 +37,7 @@ services:
 
 volumes:
   pgdata:
-  selfhostedtools-resumeoptimizer-fviidj_pgdata:
+  selfhostedtools-resumeoptimzier-mg5uva_pgdata:
     external: true
 
 networks:
