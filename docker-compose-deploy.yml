@@ -14,9 +14,7 @@ services:
       retries: 10
       start_period: 10s
     networks:
-      resume-internal:
-        aliases:
-          - postgres
+      - resume-internal
   app-resume:
     # Dokploy should use Docker Compose mode for this file so it can build
     # from the repository's Dockerfile instead of requiring a prebuilt image.
