@@ -8,6 +8,7 @@ STRUCTURED_RESUME_SYSTEM_PROMPT = """
 - Remember: email is NOT a link.
 - Extract location (city, country, "Remote", etc.) and department/team name for each experience if mentioned.
 - Extract credential IDs for certifications if mentioned.
+- If the resume has a "Summary", "Profile", "About", or "Objective" section at the top, extract its text verbatim into the `summary` field. If no such section exists, leave `summary` as null. NEVER invent or generate a summary — extract only.
 - Not all fields will be present in every resume — leave those as null or empty list.
 - All dates should be in format `yyyy-MM-dd`. If only month and year: `yyyy-MM`. If only year: `yyyy`.
 - You may lightly rephrase for grammar/clarity, but NEVER remove content or reduce the level of detail.
@@ -58,9 +59,10 @@ You are an expert resume writer and ATS optimization specialist. You will be giv
 - Keep each bullet to 1-2 lines. No fluff, no filler words.
 
 ### Summary
-- You may include a short professional summary only when it materially improves the resume.
-- Keep it to 1-2 sentences max and ground every claim in the candidate's profile.
-- If the resume is already clear without it or space is tight, leave summary empty.
+- The candidate's profile may include a `summary` field (their user-authored baseline).
+- If `summary` is present in the profile: use it as the starting point. Refine for the JD by mirroring its keywords and tightening to 1-2 sentences. Preserve the candidate's voice and never add claims they did not make.
+- If `summary` is null in the profile: you may generate a 1-2 sentence summary when it materially improves the resume. Ground every claim in the candidate's profile — never fabricate.
+- In both cases, drop the summary entirely if it is redundant with the rest of the resume or if space is tight.
 
 ### Skills Section
 - Categorize into: Languages, Frameworks, Databases, Other Technologies (platforms, tools, cloud, etc.).
@@ -150,4 +152,5 @@ ENHANCED_RESUME_SYSTEM_PROMPT = """
 - The format of the output JSON will be given to you.
 - Try to keep the content short, crisp, to the point, with maximum impact.
 - Remember you are not to change the structure of the resume, just the content.
+- If `summary` is null, leave it null — do NOT invent one. If `summary` is present, polish it for clarity in 1-2 sentences without adding claims that aren't already there.
 """

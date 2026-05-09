@@ -65,6 +65,10 @@ class ResumeInfo(BaseModel):
         default=None, description='Date of birth in the format "YYYY-MM-DD"'
     )
     email: str = Field(title="Email")
+    summary: Optional[str] = Field(
+        default=None,
+        title="Optional professional summary extracted verbatim from the resume",
+    )
     links: List[Link] = Field(default=[], title="List of all profile links found in the resume")
     projects: List[Project] = Field(default=[], title="List of projects")
     past_experience: List[Experience] = Field(default=[], title="List of experiences")

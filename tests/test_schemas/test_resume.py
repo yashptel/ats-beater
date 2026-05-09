@@ -52,3 +52,30 @@ def test_resume_info_from_dict():
     info = ResumeInfo.model_validate(data)
     assert info.name == "Test"
     assert len(info.links) == 1
+
+
+def test_resume_info_summary_defaults_to_none():
+    info = ResumeInfo(name="No Summary", email="ns@example.com")
+    assert info.summary is None
+
+
+def test_resume_info_summary_missing_key_is_none():
+    data = {"name": "Legacy", "email": "legacy@example.com"}
+    info = ResumeInfo.model_validate(data)
+    assert info.summary is None
+
+
+def test_resume_info_summary_roundtrip():
+    text = "Engineer with 5 years building distributed systems."
+    info = ResumeInfo(name="Roundtrip", email="rt@example.com", summary=text)
+    dumped = info.model_dump()
+    assert dumped["summary"] == text
+    rehydrated = ResumeInfo.model_validate(dumped)
+    assert rehydrated.summary == text
+
+
+def test_resume_info_summary_explicit_null():
+    info = ResumeInfo.model_validate(
+        {"name": "Null", "email": "null@example.com", "summary": None}
+    )
+    assert info.summary is None

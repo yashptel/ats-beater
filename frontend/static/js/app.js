@@ -1883,6 +1883,10 @@ const ProfileDetailPage = {
                 </a>
               </div>
             </div>
+            <div v-if="info.summary" class="widget-card fade-slide-in">
+              <div class="section-label">Summary</div>
+              <p class="text-xs text-slate-300 mt-3 leading-relaxed whitespace-pre-line">{{ info.summary }}</p>
+            </div>
             <div v-if="info.skills && info.skills.length" class="widget-card fade-slide-in">
               <div class="section-label">Skills</div>
               <div class="space-y-3 mt-3">
@@ -2025,6 +2029,17 @@ const ProfileDetailPage = {
                   <input v-model="link.url" class="input-field flex-1" placeholder="https://..." />
                   <button @click="ed.links.splice(i,1)" class="text-red-400 hover:text-red-300 text-xs flex-shrink-0 self-end md:self-center">X</button>
                 </div>
+              </div>
+            </div>
+            <!-- Summary -->
+            <div class="widget-card">
+              <div class="flex items-center justify-between">
+                <div class="section-label">Summary</div>
+                <button v-if="ed.summary === null" @click="ed.summary = ''" class="btn-ghost text-[10px]">+ ADD SUMMARY</button>
+                <button v-else @click="ed.summary = null" class="text-red-400 hover:text-red-300 text-[10px] font-mono">REMOVE</button>
+              </div>
+              <div v-if="ed.summary !== null" class="mt-3">
+                <textarea v-model="ed.summary" class="input-field" rows="3" placeholder="A short professional summary (1-2 sentences). The AI will refine it for each job."></textarea>
               </div>
             </div>
             <!-- Skills -->
@@ -2341,6 +2356,7 @@ const ProfileDetailPage = {
       ed.value.certifications = ed.value.certifications || [];
       ed.value.patents = ed.value.patents || [];
       ed.value.papers = ed.value.papers || [];
+      ed.value.summary = ed.value.summary == null ? null : ed.value.summary;
       editing.value = true;
       editError.value = null;
     };
@@ -2349,7 +2365,12 @@ const ProfileDetailPage = {
       saving.value = true;
       editError.value = null;
       try {
-        await store.updateProfile(profileId.value, ed.value);
+        const payload = { ...ed.value };
+        if (typeof payload.summary === 'string') {
+          const trimmed = payload.summary.trim();
+          payload.summary = trimmed === '' ? null : trimmed;
+        }
+        await store.updateProfile(profileId.value, payload);
         editing.value = false;
         ed.value = null;
       } catch (e) {

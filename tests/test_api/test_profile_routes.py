@@ -71,3 +71,53 @@ async def test_enhance_requires_ai_settings(client, ready_profile):
     response = await client.post(f"/profiles/{ready_profile.id}/enhance")
     assert response.status_code == 400
     assert response.json()["detail"] == "ai_setup_required"
+
+
+@pytest.mark.asyncio
+async def test_put_profile_persists_summary(client, ready_profile):
+    summary_text = "Engineer with 5 years building distributed systems."
+    response = await client.put(
+        f"/profiles/{ready_profile.id}",
+        json={
+            "resume_info": {
+                "name": "Test User",
+                "email": "test@example.com",
+                "summary": summary_text,
+                "skills": [],
+            }
+        },
+    )
+    assert response.status_code == 200
+
+    fetched = await client.get(f"/profiles/{ready_profile.id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["resume_info"]["summary"] == summary_text
+
+
+@pytest.mark.asyncio
+async def test_put_profile_clears_summary_with_null(client, ready_profile):
+    await client.put(
+        f"/profiles/{ready_profile.id}",
+        json={
+            "resume_info": {
+                "name": "Test User",
+                "email": "test@example.com",
+                "summary": "Some text to be cleared.",
+            }
+        },
+    )
+
+    response = await client.put(
+        f"/profiles/{ready_profile.id}",
+        json={
+            "resume_info": {
+                "name": "Test User",
+                "email": "test@example.com",
+                "summary": None,
+            }
+        },
+    )
+    assert response.status_code == 200
+
+    fetched = await client.get(f"/profiles/{ready_profile.id}")
+    assert fetched.json()["resume_info"]["summary"] is None
