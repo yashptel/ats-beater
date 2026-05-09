@@ -61,7 +61,10 @@ class CustomResumeInfo(BaseModel):
     summary: Optional[str] = Field(default=None, title="Optional professional summary")
     links: List[CustomLink] = Field(default=[], title="List of links")
     projects: List[CustomProject] = Field(default=[], title="List of projects")
-    past_experience: List[CustomExperience] = Field(default=[], title="List of experiences")
+    past_experience: List[CustomExperience] = Field(
+        default=[],
+        title="List of experiences in reverse-chronological order (most recent role first)",
+    )
     achievements: List[str] = Field(default=[], title="List of achievements")
     skills: CustomSkills = Field(default_factory=CustomSkills, title="Skills")
     educations: List[CustomEducation] = Field(default=[], title="List of educations")

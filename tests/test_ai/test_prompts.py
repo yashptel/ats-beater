@@ -51,3 +51,24 @@ def test_enhanced_resume_prompt_preserves_null_summary():
     text = ENHANCED_RESUME_SYSTEM_PROMPT.lower()
     assert "summary" in text
     assert "null" in text
+
+
+def test_custom_resume_prompt_requires_reverse_chronological_experience():
+    """Guards against silent removal of the ordering instruction.
+
+    LLM compliance is non-deterministic; this test only protects the prompt
+    from refactor drift. A property test against the live API is the right
+    seam for behavioral verification but is out of scope for unit tests.
+    """
+    text = CUSTOM_RESUME_SYSTEM_PROMPT.lower()
+    assert "reverse-chronological" in text or "reverse chronological" in text
+    assert "past_experience" in text or "experience" in text
+
+
+def test_custom_resume_schema_field_title_signals_ordering():
+    from app.schemas.custom_resume import CustomResumeInfo
+
+    schema = CustomResumeInfo.model_json_schema()
+    past_experience_field = schema["properties"]["past_experience"]
+    title = past_experience_field.get("title", "").lower()
+    assert "reverse-chronological" in title or "most recent" in title
