@@ -5223,8 +5223,8 @@ const ChatPanel = {
 
     const JOB_STARTERS = [
       'Rewrite my first experience to better match this role',
-      'Move my most relevant project to the top',
-      'Which parts of my resume are weakest for this job?',
+      'Draft an answer to "Why do you want to work here?"',
+      'Help me write a referral message for this job',
     ];
     const PROFILE_STARTERS = [
       'Add a new skill to my profile',

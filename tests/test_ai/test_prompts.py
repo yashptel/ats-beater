@@ -6,6 +6,7 @@ from app.services.ai.prompts import (
     ENHANCED_RESUME_SYSTEM_PROMPT,
     STRUCTURED_RESUME_SYSTEM_PROMPT,
 )
+from app.services.chat.service import CHAT_SYSTEM_PROMPT
 
 
 def test_custom_resume_user_prompt_carries_profile_summary():
@@ -72,3 +73,37 @@ def test_custom_resume_schema_field_title_signals_ordering():
     past_experience_field = schema["properties"]["past_experience"]
     title = past_experience_field.get("title", "").lower()
     assert "reverse-chronological" in title or "most recent" in title
+
+
+def test_chat_prompt_contains_interview_answer_section():
+    """Guards the Interview Answer Drafting section against silent drift."""
+    text = CHAT_SYSTEM_PROMPT
+    assert "## Interview Answer Drafting" in text
+    lower = text.lower()
+    assert "behavioural" in lower or "behavioral" in lower
+    assert "star breakdown" in lower
+    assert "situation:" in lower
+    assert "task:" in lower
+    assert "action:" in lower
+    assert "result:" in lower
+
+
+def test_chat_prompt_contains_referral_section():
+    """Guards the Referral Message Drafting section against silent drift."""
+    text = CHAT_SYSTEM_PROMPT
+    assert "## Referral Message Drafting" in text
+    lower = text.lower()
+    assert "channel" in lower
+    assert "recipient" in lower
+    assert "subject:" in lower
+    assert "linkedin" in lower
+    assert "one clarifying question" in lower
+
+
+def test_chat_prompt_keeps_truthfulness_guard():
+    """Both new sections must keep the never-fabricate guardrail."""
+    text = CHAT_SYSTEM_PROMPT
+    assert text.count("Truthfulness (ABSOLUTE)") >= 2
+    lower = text.lower()
+    assert "never invent" in lower
+    assert "fabricate" in lower
