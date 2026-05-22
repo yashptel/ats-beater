@@ -2,7 +2,7 @@
 
 ## What This Is
 
-**ATS Beater** — AI-powered resume tailoring service by Yash Patel. Upload PDF resume → AI structures it → paste a job description → AI tailors a custom resume → LaTeX compiles to PDF.
+**ATS Beater** — AI-powered resume tailoring service by [Yash Patel](https://linkedin.com/in/yashptel). Upload PDF resume → AI structures it → paste a job description → AI tailors a custom resume → LaTeX compiles to PDF.
 
 ## Tech Stack
 

@@ -4,7 +4,7 @@ Open-source AI-powered resume tailoring service. Upload your PDF resume, paste a
 
 Built with FastAPI, Vue 3, Google Gemini, and LaTeX.
 
-**Live at [resume.debugblackbox.com](http://resume.debugblackbox.com)**
+**Live at [resume.debugblackbox.com](http://resume.debugblackbox.com/)**
 
 ## How It Works
 
@@ -77,7 +77,7 @@ stateDiagram-v2
 
 ```bash
 # Clone
-git clone https://github.com/yashptel/ats-beater.git && cd ats-beater
+git clone https://github.com/yashptel/ats-beater.git && cd ats-beater  # Or your own fork
 
 # Copy environment file and fill in your keys
 cp .env.example .env
