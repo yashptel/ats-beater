@@ -18,6 +18,7 @@ async def test_ai_settings_crud_flow(client):
     data = response.json()
     assert data["has_ai_settings"] is False
     assert "gemini-3-flash-preview" in data["allowed_models"]
+    assert "gemini-3.5-flash" in data["allowed_models"]
 
     with patch(
         "app.api.auth.ai_settings_service.validate_configuration",

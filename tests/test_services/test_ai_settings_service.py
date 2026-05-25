@@ -21,6 +21,11 @@ def test_ai_settings_rejects_unknown_models():
         service.ensure_allowed_model("gemini-2.5-pro-preview")
 
 
+def test_ai_settings_accepts_gemini_3_5_flash():
+    service = AISettingsService()
+    service.ensure_allowed_model("gemini-3.5-flash")
+
+
 @pytest.mark.asyncio
 async def test_resolve_for_user_requires_saved_settings(db_session, test_user):
     service = AISettingsService()
