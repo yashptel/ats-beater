@@ -8,7 +8,7 @@ from alembic import context
 from app.models.base import Base
 
 # Import all models so they register with Base.metadata
-from app.models import user, profile, job, token_usage, tenant, roast, credit  # noqa: F401
+from app.models import user, profile, job, token_usage, tenant, roast  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
