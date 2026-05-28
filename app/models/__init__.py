@@ -8,17 +8,9 @@ from app.models.roast import Roast
 from app.models.roast_view import RoastView
 from app.models.ai_settings import UserAISettings
 from app.models.chat_message import ChatMessage
-from app.models.credit import (
-    CreditPack, TimePassTier, UserCredit, UserTimePass,
-    CreditTransaction, PromoCode, PromoRedemption,
-    TransactionType, PromoType,
-)
 
 __all__ = [
     "Base", "TimestampMixin", "User", "Profile", "Job",
     "LLMRequest", "Tenant", "TenantDomainRule", "Roast", "RoastView",
     "UserAISettings", "ChatMessage",
-    "CreditPack", "TimePassTier", "UserCredit", "UserTimePass",
-    "CreditTransaction", "PromoCode", "PromoRedemption",
-    "TransactionType", "PromoType",
 ]

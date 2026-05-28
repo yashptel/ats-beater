@@ -14,10 +14,6 @@ class AIInferenceError(Exception):
     pass
 
 
-class UsageLimitExceeded(Exception):
-    pass
-
-
 class AuthenticationError(Exception):
     pass
 

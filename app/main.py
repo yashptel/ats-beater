@@ -14,7 +14,6 @@ from app.exceptions import (
     JobNotFoundError,
     LaTeXCompilationError,
     AIInferenceError,
-    UsageLimitExceeded,
     AuthenticationError,
     ForbiddenError,
     RoastNotFoundError,
@@ -165,10 +164,6 @@ def create_app() -> FastAPI:
     async def ai_error_handler(request: Request, exc: AIInferenceError):
         return JSONResponse(status_code=502, content={"detail": str(exc)})
 
-    @app.exception_handler(UsageLimitExceeded)
-    async def usage_limit_handler(request: Request, exc: UsageLimitExceeded):
-        return JSONResponse(status_code=429, content={"detail": str(exc)})
-
     @app.exception_handler(AuthenticationError)
     async def auth_error_handler(request: Request, exc: AuthenticationError):
         return JSONResponse(status_code=401, content={"detail": str(exc)})
@@ -260,8 +255,6 @@ body{{background:#0a0f1e;color:#e2e8f0;font-family:'Inter',sans-serif;min-height
     from app.api.auth import router as auth_router
     from app.api.profiles import router as profiles_router
     from app.api.jobs import router as jobs_router
-    from app.api.credits import router as credits_router
-    from app.api.payments import router as payments_router
     from app.api.progress import router as progress_router
     from app.api.admin import router as admin_router
     from app.api.roasts import router as roasts_router
@@ -271,8 +264,6 @@ body{{background:#0a0f1e;color:#e2e8f0;font-family:'Inter',sans-serif;min-height
     app.include_router(auth_router)
     app.include_router(profiles_router)
     app.include_router(jobs_router)
-    app.include_router(credits_router)
-    app.include_router(payments_router)
     app.include_router(progress_router)
     app.include_router(admin_router)
     app.include_router(roasts_router)

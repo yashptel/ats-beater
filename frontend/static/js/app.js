@@ -498,75 +498,6 @@ const useRoastStore = defineStore('roast', {
   },
 });
 
-// ================================================================
-// CREDIT STORE
-// ================================================================
-const useCreditStore = defineStore('credit', {
-  state: () => ({
-    balance: 0,
-    dailyFreeRemaining: 0,
-    dailyFreeTotal: 3,
-    activeTimePass: null,
-    hasUnlimited: false,
-    packs: [],
-    timePasses: [],
-    transactions: [],
-    txnTotal: 0,
-    txnPage: 1,
-    txnPages: 1,
-    loading: false,
-    error: null,
-  }),
-  getters: {
-    totalAvailable: (s) => s.hasUnlimited ? 999 : s.balance + s.dailyFreeRemaining,
-    displayBalance: (s) => {
-      if (s.hasUnlimited) return 'UNLIMITED';
-      const total = s.balance + s.dailyFreeRemaining;
-      return String(total);
-    },
-  },
-  actions: {
-    async fetchBalance() {
-      try {
-        const data = await api.get('/credits/me');
-        this.balance = data.balance;
-        this.dailyFreeRemaining = data.daily_free_remaining;
-        this.dailyFreeTotal = data.daily_free_total;
-        this.activeTimePass = data.active_time_pass;
-        this.hasUnlimited = data.has_unlimited;
-      } catch (e) { this.error = e.message; }
-    },
-    async fetchPacks() {
-      try {
-        const data = await api.get('/credits/packs');
-        this.packs = data.credit_packs;
-        this.timePasses = data.time_passes;
-      } catch (e) { this.error = e.message; }
-    },
-    async fetchHistory(page = 1, search = '') {
-      this.loading = true;
-      try {
-        const data = await api.get(`/credits/history?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
-        this.transactions = data.items;
-        this.txnTotal = data.total;
-        this.txnPage = data.page;
-        this.txnPages = data.pages;
-      } catch (e) { this.error = e.message; }
-      this.loading = false;
-    },
-    async redeemPromo(code) {
-      const data = await api.post('/credits/redeem-promo', { code });
-      if (data.balance) {
-        this.balance = data.balance.balance;
-        this.dailyFreeRemaining = data.balance.daily_free_remaining;
-        this.hasUnlimited = data.balance.has_unlimited;
-        this.activeTimePass = data.balance.active_time_pass;
-      }
-      return data;
-    },
-  },
-});
-
 const useAISettingsStore = defineStore('aiSettings', {
   state: () => ({
     hasAISettings: false,
@@ -632,203 +563,6 @@ const useAISettingsStore = defineStore('aiSettings', {
     },
   },
 });
-
-// ================================================================
-// PAYWALL MODAL STATE
-// ================================================================
-const paywallState = reactive({
-  visible: false,
-  _resolve: null,
-});
-
-function showPaywall() {
-  return new Promise((resolve) => {
-    paywallState.visible = true;
-    paywallState._resolve = resolve;
-  });
-}
-
-function _closePaywall(result) {
-  if (paywallState._resolve) paywallState._resolve(result);
-  paywallState.visible = false;
-  paywallState._resolve = null;
-}
-
-const PaywallModal = {
-  template: `
-    <Teleport to="body">
-      <transition name="confirm">
-        <div v-if="state.visible" class="confirm-backdrop" @click.self="close(false)">
-          <div class="confirm-card" style="max-width:540px;border-color:rgba(251,65,0,0.2);">
-            <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(251,65,0,0.12);">
-                <span style="font-size:22px;font-weight:800;color:var(--orange);font-family:var(--font-mono);">$</span>
-              </div>
-              <div>
-                <h3 class="font-mono font-bold text-sm tracking-wide text-white">CREDITS REQUIRED</h3>
-                <p class="text-[11px]" style="color:var(--text-dim)">Purchase credits to continue</p>
-              </div>
-            </div>
-
-            <!-- Loading spinner -->
-            <div v-if="packsLoading" class="flex justify-center py-6">
-              <div class="loading-spinner"></div>
-            </div>
-
-            <!-- Credit Packs -->
-            <div v-if="!packsLoading && creditStore.packs.length" class="mb-4">
-              <div class="section-label mb-2">Credit Packs</div>
-              <div class="space-y-2">
-                <div v-for="p in creditStore.packs" :key="p.id"
-                     class="flex items-center justify-between p-3 rounded-lg" style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.04);">
-                  <div>
-                    <span class="text-white text-sm font-semibold">{{ p.name }}</span>
-                    <span class="text-xs ml-2" style="color:var(--teal)">{{ p.credits }} credits</span>
-                  </div>
-                  <button @click="buy('credit_pack', p.id, p.price_paise)" class="btn-ghost text-xs" :disabled="buying">
-                    {{ formatPrice(p.price_paise) }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Time Passes (Coming Soon) -->
-            <div v-if="!packsLoading && creditStore.timePasses.length" class="mb-4 opacity-50">
-              <div class="section-label mb-2">Time Passes <span class="text-[9px] font-mono ml-1 px-1.5 py-0.5 rounded" style="background:rgba(1,169,219,0.15);color:var(--teal);">COMING SOON</span></div>
-              <div class="space-y-2">
-                <div v-for="t in creditStore.timePasses" :key="t.id"
-                     class="flex items-center justify-between p-3 rounded-lg" style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.04);">
-                  <div>
-                    <span class="text-white text-sm font-semibold">{{ t.name }}</span>
-                    <span class="text-xs ml-2" style="color:var(--teal)">{{ t.duration_days }} days unlimited</span>
-                  </div>
-                  <span class="text-[10px] font-mono" style="color:var(--text-dim)">{{ formatPrice(t.price_paise) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Promo Code -->
-            <div class="mb-4">
-              <div class="section-label mb-2">Promo Code</div>
-              <div class="flex items-center gap-2">
-                <input v-model="promoCode" placeholder="Enter code" class="input-field input-mono flex-1"
-                       @keyup.enter="redeemPromo" :disabled="buying" />
-                <button @click="redeemPromo" class="btn-ghost text-xs" :disabled="!promoCode.trim() || buying">REDEEM</button>
-              </div>
-              <p v-if="promoMsg" class="text-xs mt-2 font-mono" :style="{ color: promoError ? 'var(--red)' : 'var(--green)' }">{{ promoMsg }}</p>
-            </div>
-
-            <p v-if="error" class="text-red-400 text-xs mb-3 font-mono">{{ error }}</p>
-
-            <div class="flex justify-end">
-              <button @click="close(false)" class="btn-ghost">CLOSE</button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </Teleport>
-  `,
-  setup() {
-    const creditStore = useCreditStore();
-    const buying = ref(false);
-    const error = ref(null);
-    const promoCode = ref('');
-    const promoMsg = ref('');
-    const promoError = ref(false);
-    const packsLoading = ref(false);
-
-    watch(() => paywallState.visible, async (v) => {
-      if (v) {
-        buying.value = false;
-        error.value = null;
-        promoCode.value = '';
-        promoMsg.value = '';
-        promoError.value = false;
-        packsLoading.value = true;
-        await creditStore.fetchPacks();
-        packsLoading.value = false;
-      }
-    });
-
-    // Close on Escape key
-    function onEsc(e) { if (e.key === 'Escape' && paywallState.visible) close(false); }
-    onMounted(() => window.addEventListener('keydown', onEsc));
-    onUnmounted(() => window.removeEventListener('keydown', onEsc));
-
-    function formatPrice(paise) {
-      return '₹' + (paise / 100).toFixed(0);
-    }
-
-    async function buy(itemType, itemId, amountPaise) {
-      if (typeof Razorpay === 'undefined') {
-        error.value = 'Payment gateway not loaded. Please refresh the page.';
-        return;
-      }
-      buying.value = true;
-      error.value = null;
-      try {
-        const order = await api.post('/payments/create-order', { item_type: itemType, item_id: itemId });
-        const options = {
-          key: order.razorpay_key_id,
-          amount: order.amount_paise,
-          currency: order.currency,
-          order_id: order.order_id,
-          name: 'ATS Beater',
-          description: itemType === 'credit_pack' ? 'Credit Pack' : 'Time Pass',
-          handler: async function(response) {
-            try {
-              await api.post('/payments/verify', {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              });
-              await creditStore.fetchBalance();
-              close(true);
-            } catch (e) {
-              error.value = 'Payment verification failed: ' + e.message;
-            }
-            buying.value = false;
-          },
-          modal: {
-            ondismiss: function() { buying.value = false; },
-          },
-          theme: { color: '#FB4100' },
-        };
-        const rzp = new Razorpay(options);
-        rzp.open();
-      } catch (e) {
-        error.value = e.message;
-        buying.value = false;
-      }
-    }
-
-    async function redeemPromo() {
-      if (!promoCode.value.trim() || buying.value) return;
-      buying.value = true;
-      promoMsg.value = '';
-      promoError.value = false;
-      try {
-        const result = await creditStore.redeemPromo(promoCode.value);
-        promoMsg.value = result.message;
-        promoCode.value = '';
-        // If credits were added, auto-close paywall after delay (guard against race)
-        if (creditStore.totalAvailable > 0) {
-          setTimeout(() => { if (paywallState.visible) close(true); }, 1000);
-        }
-      } catch (e) {
-        promoMsg.value = e.message;
-        promoError.value = true;
-      }
-      buying.value = false;
-    }
-
-    function close(result) {
-      _closePaywall(result);
-    }
-
-    return { state: paywallState, creditStore, buying, error, promoCode, promoMsg, promoError, packsLoading, formatPrice, buy, redeemPromo, close };
-  },
-};
 
 // ================================================================
 // CONFIRM MODAL — replaces native window.confirm
@@ -1018,10 +752,6 @@ const AppSidebar = {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.37 17l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.24A2 2 0 1 1 7.04 4.4l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 19.6 7.04l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Settings
           </router-link>
-          <router-link to="/credits" class="sidebar-link" active-class="active">
-            <span style="font-size:16px;font-weight:700;width:18px;text-align:center;display:inline-block;">$</span>
-            Credits
-          </router-link>
         </div>
         <div class="pt-4 mt-4 border-t border-white/5" v-if="auth.isSuperAdmin">
           <router-link to="/admin" class="sidebar-link" active-class="active">
@@ -1030,21 +760,6 @@ const AppSidebar = {
           </router-link>
         </div>
       </nav>
-      <!-- Credit Badge -->
-      <div v-if="auth.user" class="mx-3 mb-2 p-3 rounded-lg" style="background:rgba(251,65,0,0.06);border:1px solid rgba(251,65,0,0.15);">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-[9px] font-mono font-bold tracking-widest uppercase" style="color:var(--orange)">Credits</span>
-          <span class="font-mono font-bold text-sm" style="color:var(--orange)">{{ creditStore.displayBalance }}</span>
-        </div>
-        <div class="text-[10px] font-mono" style="color:var(--text-dim)">
-          {{ creditStore.dailyFreeRemaining }}/{{ creditStore.dailyFreeTotal }} free today
-        </div>
-        <router-link v-if="creditStore.totalAvailable === 0" to="/credits"
-                     class="block mt-2 text-center text-[10px] font-mono font-bold tracking-wide py-1.5 rounded"
-                     style="background:var(--orange);color:white;">
-          GET MORE CREDITS
-        </router-link>
-      </div>
       <div class="px-4 py-4 border-t border-white/5" v-if="auth.user">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
@@ -1068,15 +783,12 @@ const AppSidebar = {
   `,
   setup() {
     const auth = useAuthStore();
-    const creditStore = useCreditStore();
     const router = useRouter();
-    onMounted(() => { if (auth.user) creditStore.fetchBalance(); });
     const doLogout = () => {
       auth.logout();
-      creditStore.$reset();
       router.push('/login');
     };
-    return { auth, creditStore, doLogout };
+    return { auth, doLogout };
   },
 };
 
@@ -1255,12 +967,6 @@ const DashboardPage = {
               <p class="kpi-value">{{ jobStore.total }}</p>
               <p class="text-xs mt-1" style="color:var(--text-dim)">{{ totalJobs }} total</p>
             </div>
-            <div class="widget-card fade-slide-in stagger-3 text-center">
-              <p class="kpi-label mb-2">Credits Available</p>
-              <p class="kpi-value" style="color:var(--orange)">{{ creditStore.displayBalance }}</p>
-              <p v-if="!creditStore.hasUnlimited" class="text-xs mt-1" style="color:var(--text-dim)">{{ creditStore.dailyFreeRemaining }} free today</p>
-              <p v-else class="text-xs mt-1" style="color:var(--teal)">Time pass active</p>
-            </div>
           </div>
 
           <!-- Nudge Banner -->
@@ -1343,14 +1049,12 @@ const DashboardPage = {
     const router = useRouter();
     const profileStore = useProfileStore();
     const jobStore = useJobStore();
-    const creditStore = useCreditStore();
     const roastStore = useRoastStore();
     const dataReady = ref(false);
     onMounted(async () => {
       await Promise.all([
         profileStore.fetchProfiles(true, { limit: 5 }),
         jobStore.fetchJobs(true, { limit: 5 }),
-        creditStore.fetchBalance(),
         roastStore.fetchRoasts(true),
       ]);
       dataReady.value = true;
@@ -1375,7 +1079,7 @@ const DashboardPage = {
     const goProfile = (id) => { profileStore.selectProfile(id); router.push('/profiles/view'); };
     const goJob = (id) => { jobStore.selectJob(id); router.push('/jobs/view'); };
     return {
-      profileStore, jobStore, creditStore, roastStore,
+      profileStore, jobStore, roastStore,
       profiles, jobs, totalProfiles, totalJobs,
       isNewUser, dataReady, nudgeDismissed, showNudge, onboardingSteps,
       formatDate, goProfile, goJob, jobLabel,
@@ -3345,18 +3049,6 @@ const AdminPage = {
               <div class="kpi-label">ROASTS</div>
               <div class="text-xl font-mono font-bold" style="color:var(--orange)">{{ overview.total_roasts }}</div>
             </div>
-            <div class="widget-card text-center" style="border-left:3px solid var(--orange);">
-              <div class="kpi-label">PURCHASES</div>
-              <div class="text-xl font-mono font-bold" style="color:var(--orange)">{{ overview.total_purchase_txns }}</div>
-            </div>
-            <div class="widget-card text-center">
-              <div class="kpi-label">USED TODAY</div>
-              <div class="text-xl font-mono font-bold text-white">{{ overview.consumed_today }}</div>
-            </div>
-            <div class="widget-card text-center" style="border-left:3px solid var(--teal);">
-              <div class="kpi-label">ACTIVE PASSES</div>
-              <div class="text-xl font-mono font-bold" style="color:var(--teal)">{{ overview.active_time_passes }}</div>
-            </div>
             <div class="widget-card text-center" style="border-left:3px solid var(--green);">
               <div class="kpi-label">NEW (7D)</div>
               <div class="text-xl font-mono font-bold" style="color:var(--green)">{{ overview.new_users_7d }}</div>
@@ -3501,25 +3193,6 @@ const AdminPage = {
             </template>
           </div>
 
-          <!-- Section 6: Recent Activity -->
-          <div>
-            <div class="section-label mb-3">Recent Activity</div>
-            <div class="widget-card">
-              <div v-if="!overview.recent_activity || overview.recent_activity.length === 0" class="empty-state"><p class="text-sm">No recent activity</p></div>
-              <div v-else class="space-y-2">
-                <div v-for="a in overview.recent_activity" :key="a.id" class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(0,0,0,0.15);">
-                  <div class="flex items-center gap-3">
-                    <span :style="{ color: a.amount >= 0 ? 'var(--green)' : 'var(--red)' }" class="font-mono font-bold text-sm w-10 text-right">{{ a.amount >= 0 ? '+' : '' }}{{ a.amount }}</span>
-                    <div>
-                      <span class="text-white text-xs">{{ a.user_email }}</span>
-                      <span class="text-[10px] ml-2 font-mono" style="color:var(--text-dim)">{{ a.type }}</span>
-                    </div>
-                  </div>
-                  <span class="text-[10px] font-mono" style="color:var(--text-dim)">{{ formatDate(a.created_at, { includeTime: true }) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
         </div>
 
@@ -3533,94 +3206,25 @@ const AdminPage = {
           <div class="widget-card">
             <div v-if="users.length === 0" class="empty-state"><p class="text-sm">No users</p></div>
             <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0" v-else>
-            <table class="data-table admin-table" style="min-width:780px;">
-              <thead><tr><th>Name</th><th>Email</th><th>Credits</th><th>Free</th><th>Pass</th><th>Jobs</th><th class="hidden md:table-cell">Tenant</th><th class="hidden md:table-cell">Role</th><th></th></tr></thead>
+            <table class="data-table admin-table" style="min-width:640px;">
+              <thead><tr><th>Name</th><th>Email</th><th>Jobs</th><th class="hidden md:table-cell">Tenant</th><th class="hidden md:table-cell">Role</th></tr></thead>
               <tbody>
-                <template v-for="u in users" :key="u.id">
-                  <tr @click="toggleUserDetail(u.id)" style="cursor:pointer;" :style="expandedUser === u.id ? 'background:rgba(251,65,0,0.04);' : ''">
-                    <td class="text-white font-medium">{{ u.name }}</td>
-                    <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ u.email }}</td>
-                    <td class="font-mono font-bold" style="color:var(--orange)">{{ u.balance }}</td>
-                    <td class="font-mono text-xs">{{ u.daily_free_remaining }}</td>
-                    <td>
-                      <span v-if="u.active_time_pass" class="badge badge-ready">{{ u.active_time_pass.tier_name }}</span>
-                      <span v-else class="text-[10px] font-mono" style="color:var(--text-dim)">-</span>
-                    </td>
-                    <td class="font-mono text-xs">{{ u.job_count }}</td>
-                    <td class="hidden md:table-cell">
-                      <select v-model="u.tenant_id" @change="assignTenant(u.id, u.tenant_id)" @click.stop
-                              class="input-field" style="padding:4px 24px 4px 8px; width:auto; font-size:11px;" :disabled="saving">
-                        <option :value="null">--</option>
-                        <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
-                      </select>
-                    </td>
-                    <td class="hidden md:table-cell">
-                      <span v-if="u.is_super_admin" class="badge" style="background:rgba(251,65,0,0.15); color:var(--orange); font-size:9px;">ADMIN</span>
-                      <span v-else class="badge" style="background:rgba(148,163,184,0.1); color:var(--text-dim); font-size:9px;">USER</span>
-                    </td>
-                    <td class="text-right">
-                      <svg :style="{ transform: expandedUser === u.id ? 'rotate(180deg)' : '' }" style="transition:transform 0.2s;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                    </td>
-                  </tr>
-                  <!-- Expanded user detail row -->
-                  <tr v-if="expandedUser === u.id">
-                    <td colspan="9" style="padding:0; border:none;">
-                      <div class="p-4" style="background:rgba(0,0,0,0.15); border-top:1px solid rgba(255,255,255,0.04);">
-                        <div v-if="userDetailLoading" class="flex justify-center py-4"><div class="loading-spinner"></div></div>
-                        <template v-else-if="userDetail">
-                          <!-- Summary cards -->
-                          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                            <div class="p-3 rounded-lg" style="background:rgba(0,0,0,0.2);">
-                              <div class="kpi-label">BALANCE</div>
-                              <div class="text-lg font-mono font-bold" style="color:var(--orange)">{{ userDetail.balance.balance }}</div>
-                            </div>
-                            <div class="p-3 rounded-lg" style="background:rgba(0,0,0,0.2);">
-                              <div class="kpi-label">DAILY FREE</div>
-                              <div class="text-lg font-mono font-bold text-white">{{ userDetail.balance.daily_free_remaining }} / {{ userDetail.balance.daily_free_total }}</div>
-                            </div>
-                            <div class="p-3 rounded-lg" style="background:rgba(0,0,0,0.2);">
-                              <div class="kpi-label">TIME PASS</div>
-                              <div v-if="userDetail.balance.active_time_pass" class="text-sm font-mono" style="color:var(--teal)">
-                                {{ userDetail.balance.active_time_pass.tier_name }}
-                                <div class="text-[10px]" style="color:var(--text-dim)">expires {{ formatDate(userDetail.balance.active_time_pass.expires_at) }}</div>
-                              </div>
-                              <div v-else class="text-sm font-mono" style="color:var(--text-dim)">None</div>
-                            </div>
-                            <div class="p-3 rounded-lg" style="background:rgba(0,0,0,0.2);">
-                              <div class="kpi-label">GRANT CREDITS</div>
-                              <div class="flex items-center gap-2 mt-1">
-                                <input v-model.number="inlineGrantAmount" type="number" class="input-field" style="width:70px; padding:4px 8px; font-size:12px;" placeholder="qty" />
-                                <button @click="inlineGrant(u.id)" class="btn-ghost text-xs" :disabled="!inlineGrantAmount || saving" style="padding:4px 10px;">GRANT</button>
-                              </div>
-                              <p v-if="inlineGrantMsg" class="text-[10px] mt-1 font-mono" :style="{ color: inlineGrantError ? 'var(--red)' : 'var(--green)' }">{{ inlineGrantMsg }}</p>
-                            </div>
-                          </div>
-                          <!-- Transaction history -->
-                          <div class="section-label mb-2">Transaction History</div>
-                          <div v-if="userDetail.transactions.items.length === 0" class="text-xs font-mono py-2" style="color:var(--text-dim)">No transactions</div>
-                          <div v-else class="overflow-x-auto">
-                            <table class="data-table" style="min-width:500px;">
-                              <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th></tr></thead>
-                              <tbody>
-                                <tr v-for="t in userDetail.transactions.items" :key="t.id">
-                                  <td class="font-mono text-[10px]" style="color:var(--text-dim)">{{ formatDate(t.created_at, { includeTime: true }) }}</td>
-                                  <td><span class="badge badge-processing" style="font-size:9px;">{{ t.type }}</span></td>
-                                  <td :style="{ color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' }" class="font-mono font-bold text-xs">{{ t.amount >= 0 ? '+' : '' }}{{ t.amount }}</td>
-                                  <td class="text-[10px]" style="color:var(--text-dim)">{{ t.description || '-' }}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                            <div v-if="userDetail.transactions.pages > 1" class="flex items-center justify-center gap-3 mt-3">
-                              <button class="btn-ghost text-xs" :disabled="userDetailPage <= 1" @click="loadUserDetail(u.id, userDetailPage - 1)">PREV</button>
-                              <span class="font-mono text-[10px] text-slate-400">{{ userDetailPage }} / {{ userDetail.transactions.pages }}</span>
-                              <button class="btn-ghost text-xs" :disabled="userDetailPage >= userDetail.transactions.pages" @click="loadUserDetail(u.id, userDetailPage + 1)">NEXT</button>
-                            </div>
-                          </div>
-                        </template>
-                      </div>
-                    </td>
-                  </tr>
-                </template>
+                <tr v-for="u in users" :key="u.id">
+                  <td class="text-white font-medium">{{ u.name }}</td>
+                  <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ u.email }}</td>
+                  <td class="font-mono text-xs">{{ u.job_count }}</td>
+                  <td class="hidden md:table-cell">
+                    <select v-model="u.tenant_id" @change="assignTenant(u.id, u.tenant_id)" @click.stop
+                            class="input-field" style="padding:4px 24px 4px 8px; width:auto; font-size:11px;" :disabled="saving">
+                      <option :value="null">--</option>
+                      <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
+                    </select>
+                  </td>
+                  <td class="hidden md:table-cell">
+                    <span v-if="u.is_super_admin" class="badge" style="background:rgba(251,65,0,0.15); color:var(--orange); font-size:9px;">ADMIN</span>
+                    <span v-else class="badge" style="background:rgba(148,163,184,0.1); color:var(--text-dim); font-size:9px;">USER</span>
+                  </td>
+                </tr>
               </tbody>
             </table>
             </div>
@@ -3628,140 +3232,6 @@ const AdminPage = {
               <button class="btn-ghost text-xs" :disabled="userPage <= 1" @click="loadUsers(userPage - 1)">PREV</button>
               <span class="font-mono text-xs text-slate-400">{{ userPage }} / {{ userPages }}</span>
               <button class="btn-ghost text-xs" :disabled="userPage >= userPages" @click="loadUsers(userPage + 1)">NEXT</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ====== CATALOG TAB ====== -->
-        <div v-else-if="activeTab === 'catalog'" class="fade-slide-in">
-          <!-- Credit Packs section -->
-          <div class="section-label mb-4">Credit Packs</div>
-          <div class="widget-card mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end mb-4">
-              <div><label class="kpi-label block mb-1">Name</label><input v-model="packForm.name" class="input-field" placeholder="e.g. Starter Pack" :disabled="saving" /></div>
-              <div><label class="kpi-label block mb-1">Credits</label><input v-model.number="packForm.credits" type="number" class="input-field" :disabled="saving" /></div>
-              <div><label class="kpi-label block mb-1">Price (paise)</label><input v-model.number="packForm.price_paise" type="number" class="input-field" :disabled="saving" /></div>
-              <button @click="createPack" class="btn-ghost" :disabled="!packForm.name || !packForm.credits || !packForm.price_paise || saving">+ CREATE</button>
-            </div>
-            <p v-if="packError" class="text-red-400 text-xs mb-3 font-mono">{{ packError }}</p>
-            <div v-if="creditPacks.length === 0" class="text-xs font-mono py-2" style="color:var(--text-dim)">No credit packs yet</div>
-            <div class="overflow-x-auto" v-else>
-              <table class="data-table admin-table">
-                <thead><tr><th>Name</th><th>Credits</th><th>Price</th><th>Active</th><th>Order</th><th class="text-right">Actions</th></tr></thead>
-                <tbody>
-                  <tr v-for="p in creditPacks" :key="p.id">
-                    <td class="text-white font-medium">{{ p.name }}</td>
-                    <td class="font-mono">{{ p.credits }}</td>
-                    <td class="font-mono">\u20B9{{ (p.price_paise / 100).toFixed(0) }}</td>
-                    <td><span :class="p.is_active ? 'badge-ready' : 'badge-failed'" class="badge">{{ p.is_active ? 'YES' : 'NO' }}</span></td>
-                    <td class="font-mono text-[11px]">{{ p.sort_order }}</td>
-                    <td class="text-right">
-                      <button @click="togglePack(p)" class="btn-ghost text-xs mr-1" :disabled="saving">{{ p.is_active ? 'DEACTIVATE' : 'ACTIVATE' }}</button>
-                      <button @click="deletePack(p.id)" class="btn-ghost danger text-xs" :disabled="saving">DELETE</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Time Passes section -->
-          <div class="section-label mb-4">Time Passes <span class="text-[9px] font-mono ml-1 px-1.5 py-0.5 rounded" style="background:rgba(1,169,219,0.15);color:var(--teal);">COMING SOON</span></div>
-          <div class="widget-card mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end mb-4">
-              <div><label class="kpi-label block mb-1">Name</label><input v-model="tierForm.name" class="input-field" placeholder="e.g. 7-Day Pass" :disabled="saving" /></div>
-              <div><label class="kpi-label block mb-1">Days</label><input v-model.number="tierForm.duration_days" type="number" class="input-field" :disabled="saving" /></div>
-              <div><label class="kpi-label block mb-1">Price (paise)</label><input v-model.number="tierForm.price_paise" type="number" class="input-field" :disabled="saving" /></div>
-              <button @click="createTier" class="btn-ghost" :disabled="!tierForm.name || !tierForm.duration_days || !tierForm.price_paise || saving">+ CREATE</button>
-            </div>
-            <p v-if="tierError" class="text-red-400 text-xs mb-3 font-mono">{{ tierError }}</p>
-            <div v-if="timePassTiers.length === 0" class="text-xs font-mono py-2" style="color:var(--text-dim)">No time pass tiers yet</div>
-            <div class="overflow-x-auto" v-else>
-              <table class="data-table admin-table">
-                <thead><tr><th>Name</th><th>Days</th><th>Price</th><th>Active</th><th class="text-right">Actions</th></tr></thead>
-                <tbody>
-                  <tr v-for="t in timePassTiers" :key="t.id">
-                    <td class="text-white font-medium">{{ t.name }}</td>
-                    <td class="font-mono">{{ t.duration_days }}</td>
-                    <td class="font-mono">\u20B9{{ (t.price_paise / 100).toFixed(0) }}</td>
-                    <td><span :class="t.is_active ? 'badge-ready' : 'badge-failed'" class="badge">{{ t.is_active ? 'YES' : 'NO' }}</span></td>
-                    <td class="text-right">
-                      <button @click="toggleTier(t)" class="btn-ghost text-xs mr-1" :disabled="saving">{{ t.is_active ? 'DEACTIVATE' : 'ACTIVATE' }}</button>
-                      <button @click="deleteTier(t.id)" class="btn-ghost danger text-xs" :disabled="saving">DELETE</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Promo Codes section -->
-          <div class="section-label mb-4">Promo Codes</div>
-          <div class="widget-card">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-              <div><label class="kpi-label block mb-1">Code</label><input v-model="promoForm.code" class="input-field input-mono" placeholder="e.g. LAUNCH50" :disabled="saving" /></div>
-              <div><label class="kpi-label block mb-1">Type</label>
-                <select v-model="promoForm.type" class="input-field" :disabled="saving">
-                  <option value="CREDITS">Credits</option><option value="TIME_PASS">Time Pass</option>
-                </select>
-              </div>
-              <div><label class="kpi-label block mb-1">Value</label><input v-model.number="promoForm.value" type="number" class="input-field" :disabled="saving" placeholder="credits or tier_id" /></div>
-              <button @click="createPromo" class="btn-ghost" :disabled="!promoForm.code || !promoForm.value || saving">+ CREATE</button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 mb-4">
-              <div><label class="kpi-label block mb-1">Max Redemptions (0=unlimited)</label><input v-model.number="promoForm.max_redemptions" type="number" class="input-field" :disabled="saving" /></div>
-            </div>
-            <p v-if="promoError" class="text-red-400 text-xs mb-3 font-mono">{{ promoError }}</p>
-            <div v-if="promoCodes.length === 0" class="text-xs font-mono py-2" style="color:var(--text-dim)">No promo codes yet</div>
-            <div class="overflow-x-auto" v-else>
-              <table class="data-table admin-table">
-                <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Used</th><th>Max</th><th>Active</th><th class="text-right">Actions</th></tr></thead>
-                <tbody>
-                  <tr v-for="p in promoCodes" :key="p.id">
-                    <td class="font-mono text-white">{{ p.code }}</td>
-                    <td><span class="badge badge-processing">{{ p.type }}</span></td>
-                    <td class="font-mono">{{ p.value }}</td>
-                    <td class="font-mono">{{ p.current_redemptions }}</td>
-                    <td class="font-mono">{{ p.max_redemptions || '\u221E' }}</td>
-                    <td><span :class="p.is_active ? 'badge-ready' : 'badge-failed'" class="badge">{{ p.is_active ? 'YES' : 'NO' }}</span></td>
-                    <td class="text-right">
-                      <button @click="togglePromo(p)" class="btn-ghost text-xs mr-1" :disabled="saving">{{ p.is_active ? 'DEACTIVATE' : 'ACTIVATE' }}</button>
-                      <button @click="deletePromo(p.id)" class="btn-ghost danger text-xs" :disabled="saving">DELETE</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- ====== TRANSACTIONS TAB ====== -->
-        <div v-else-if="activeTab === 'transactions'" class="fade-slide-in">
-          <div class="widget-card">
-            <div class="flex items-center gap-3 mb-4">
-              <input v-model="txnSearch" class="input-field input-mono flex-1" placeholder="Search by description, email, razorpay ID..." @keyup.enter="loadTransactions(1)" />
-              <button @click="loadTransactions(1)" class="btn-ghost">SEARCH</button>
-            </div>
-            <div v-if="adminTxns.length === 0" class="empty-state"><p class="text-sm">No transactions</p></div>
-            <div class="overflow-x-auto" v-else>
-              <table class="data-table admin-table" style="min-width:700px;">
-                <thead><tr><th>Date</th><th>User</th><th>Type</th><th>Amount</th><th>Description</th><th class="hidden md:table-cell">Razorpay</th></tr></thead>
-                <tbody>
-                  <tr v-for="t in adminTxns" :key="t.id">
-                    <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ formatDate(t.created_at, { includeTime: true }) }}</td>
-                    <td class="text-[11px]" style="cursor:pointer; color:var(--teal);" @click="jumpToUser(t.user_email)">{{ t.user_email }}</td>
-                    <td><span class="badge badge-processing">{{ t.type }}</span></td>
-                    <td :style="{ color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' }" class="font-mono font-bold">{{ t.amount >= 0 ? '+' : '' }}{{ t.amount }}</td>
-                    <td class="text-[11px]" style="color:var(--text-dim)">{{ t.description || '-' }}</td>
-                    <td class="font-mono text-[10px] hidden md:table-cell" style="color:var(--text-dim)">{{ t.razorpay_order_id || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-if="adminTxnPages > 1" class="flex items-center justify-center gap-4 mt-4">
-              <button class="btn-ghost text-xs" :disabled="adminTxnPage <= 1" @click="loadTransactions(adminTxnPage - 1)">PREV</button>
-              <span class="font-mono text-xs text-slate-400">{{ adminTxnPage }} / {{ adminTxnPages }}</span>
-              <button class="btn-ghost text-xs" :disabled="adminTxnPage >= adminTxnPages" @click="loadTransactions(adminTxnPage + 1)">NEXT</button>
             </div>
           </div>
         </div>
@@ -3852,8 +3322,6 @@ const AdminPage = {
     const tabs = [
       { key: 'overview', label: 'OVERVIEW' },
       { key: 'users', label: 'USERS' },
-      { key: 'catalog', label: 'CATALOG' },
-      { key: 'transactions', label: 'TRANSACTIONS' },
       { key: 'settings', label: 'SETTINGS' },
     ];
     const activeTab = ref('overview');
@@ -3862,14 +3330,13 @@ const AdminPage = {
 
     // ── Overview ──
     const overview = ref({
-      total_users: 0, total_jobs: 0, completed_jobs: 0, total_purchase_txns: 0,
-      active_time_passes: 0, consumed_today: 0, total_profiles: 0, total_roasts: 0,
+      total_users: 0, total_jobs: 0, completed_jobs: 0,
+      total_profiles: 0, total_roasts: 0,
       new_users_today: 0, new_users_7d: 0,
       job_status_breakdown: {}, roast_status_breakdown: {},
       funnel: { users: 0, profiles: 0, jobs: 0, ready_jobs: 0 },
       llm_summary: { total_requests: 0, total_input_tokens: 0, total_output_tokens: 0, total_cached_tokens: 0, avg_response_time_ms: 0, success_rate_pct: 100, total_estimated_cost_usd: 0, by_model: [] },
       trends: { labels: [], users: [], profiles: [], jobs: [], roasts: [] },
-      recent_activity: [],
     });
 
     async function loadOverview() {
@@ -3921,58 +3388,12 @@ const AdminPage = {
     const userPage = ref(1);
     const userPages = ref(1);
     const userError = ref(null);
-    const expandedUser = ref(null);
-    const userDetail = ref(null);
-    const userDetailLoading = ref(false);
-    const userDetailPage = ref(1);
-    const inlineGrantAmount = ref(null);
-    const inlineGrantMsg = ref(null);
-    const inlineGrantError = ref(false);
 
     async function loadUsers(page = 1) {
       try {
         const d = await api.get(`/admin/users?page=${page}&size=50&search=${encodeURIComponent(userSearch.value)}`);
         users.value = d.items; userPage.value = d.page; userPages.value = d.pages;
       } catch(e) { userError.value = 'Failed to load users: ' + e.message; }
-    }
-
-    async function toggleUserDetail(userId) {
-      if (expandedUser.value === userId) { expandedUser.value = null; userDetail.value = null; return; }
-      expandedUser.value = userId;
-      userDetailPage.value = 1;
-      inlineGrantAmount.value = null;
-      inlineGrantMsg.value = null;
-      inlineGrantError.value = false;
-      await loadUserDetail(userId, 1);
-    }
-
-    async function loadUserDetail(userId, page = 1) {
-      userDetailLoading.value = true;
-      try {
-        userDetail.value = await api.get(`/admin/credits/user/${userId}?page=${page}&size=10`);
-        userDetailPage.value = page;
-      } catch(e) { console.error(e); }
-      userDetailLoading.value = false;
-    }
-
-    async function inlineGrant(userId) {
-      if (!inlineGrantAmount.value || saving.value) return;
-      saving.value = true;
-      inlineGrantMsg.value = null; inlineGrantError.value = false;
-      try {
-        const d = await api.post('/admin/credits/grant', { user_id: userId, amount: inlineGrantAmount.value, description: 'Admin grant' });
-        inlineGrantMsg.value = `Granted! New balance: ${d.new_balance}`;
-        inlineGrantAmount.value = null;
-        await loadUserDetail(userId, userDetailPage.value);
-        await loadUsers(userPage.value);
-      } catch(e) { inlineGrantMsg.value = e.message; inlineGrantError.value = true; }
-      saving.value = false;
-    }
-
-    function jumpToUser(email) {
-      activeTab.value = 'users';
-      userSearch.value = email;
-      loadUsers(1);
     }
 
     // ── Tenants ──
@@ -4041,60 +3462,13 @@ const AdminPage = {
       saving.value = false;
     }
 
-    // ── Credit Packs ──
-    const creditPacks = ref([]);
-    const packForm = reactive({ name: '', credits: null, price_paise: null });
-    const packError = ref(null);
-
-    async function loadPacks() { try { const d = await api.get('/admin/credit-packs'); creditPacks.value = d.items || d; } catch(e) { console.error(e); } }
-    async function createPack() { packError.value = null; saving.value = true; try { await api.post('/admin/credit-packs', { ...packForm }); Object.assign(packForm, { name: '', credits: null, price_paise: null }); await loadPacks(); } catch(e) { packError.value = e.message; } saving.value = false; }
-    async function togglePack(p) { packError.value = null; saving.value = true; try { await api.put('/admin/credit-packs/' + p.id, { is_active: !p.is_active }); await loadPacks(); } catch(e) { packError.value = e.message; } saving.value = false; }
-    async function deletePack(id) { packError.value = null; const ok = await showConfirm({ title: 'Delete Pack', message: 'Delete this credit pack?' }); if (!ok) return; saving.value = true; try { await api.del('/admin/credit-packs/' + id); await loadPacks(); } catch(e) { packError.value = e.message; } saving.value = false; }
-
-    // ── Time Pass Tiers ──
-    const timePassTiers = ref([]);
-    const tierForm = reactive({ name: '', duration_days: null, price_paise: null });
-    const tierError = ref(null);
-
-    async function loadTiers() { try { const d = await api.get('/admin/time-pass-tiers'); timePassTiers.value = d.items || d; } catch(e) { console.error(e); } }
-    async function createTier() { tierError.value = null; saving.value = true; try { await api.post('/admin/time-pass-tiers', { ...tierForm }); Object.assign(tierForm, { name: '', duration_days: null, price_paise: null }); await loadTiers(); } catch(e) { tierError.value = e.message; } saving.value = false; }
-    async function toggleTier(t) { tierError.value = null; saving.value = true; try { await api.put('/admin/time-pass-tiers/' + t.id, { is_active: !t.is_active }); await loadTiers(); } catch(e) { tierError.value = e.message; } saving.value = false; }
-    async function deleteTier(id) { tierError.value = null; const ok = await showConfirm({ title: 'Delete Tier', message: 'Delete this time pass tier?' }); if (!ok) return; saving.value = true; try { await api.del('/admin/time-pass-tiers/' + id); await loadTiers(); } catch(e) { tierError.value = e.message; } saving.value = false; }
-
-    // ── Promo Codes ──
-    const promoCodes = ref([]);
-    const promoForm = reactive({ code: '', type: 'CREDITS', value: null, max_redemptions: 0 });
-    const promoError = ref(null);
-
-    async function loadPromos() { try { const d = await api.get('/admin/promo-codes'); promoCodes.value = d.items || d; } catch(e) { console.error(e); } }
-    async function createPromo() { promoError.value = null; saving.value = true; try { await api.post('/admin/promo-codes', { ...promoForm }); Object.assign(promoForm, { code: '', type: 'CREDITS', value: null, max_redemptions: 0 }); await loadPromos(); } catch(e) { promoError.value = e.message; } saving.value = false; }
-    async function togglePromo(p) { promoError.value = null; saving.value = true; try { await api.put('/admin/promo-codes/' + p.id, { is_active: !p.is_active }); await loadPromos(); } catch(e) { promoError.value = e.message; } saving.value = false; }
-    async function deletePromo(id) { promoError.value = null; const ok = await showConfirm({ title: 'Delete Promo', message: 'Delete this promo code?' }); if (!ok) return; saving.value = true; try { await api.del('/admin/promo-codes/' + id); await loadPromos(); } catch(e) { promoError.value = e.message; } saving.value = false; }
-
-    // ── Transactions ──
-    const adminTxns = ref([]);
-    const txnSearch = ref('');
-    const adminTxnPage = ref(1);
-    const adminTxnPages = ref(1);
-
-    async function loadTransactions(page = 1) {
-      try {
-        const d = await api.get(`/admin/transactions?page=${page}&size=50&search=${encodeURIComponent(txnSearch.value)}`);
-        adminTxns.value = d.items; adminTxnPage.value = d.page; adminTxnPages.value = d.pages;
-      } catch(e) { userError.value = 'Failed to load transactions: ' + e.message; }
-    }
-
     // ── Tab switching ──
     function switchTab(key) {
       activeTab.value = key;
       tenantError.value = null; ruleError.value = null; userError.value = null;
-      renameError.value = null; editing.value = null; packError.value = null;
-      tierError.value = null; promoError.value = null;
-      expandedUser.value = null; userDetail.value = null;
+      renameError.value = null; editing.value = null;
       if (key === 'overview') loadOverview();
       else if (key === 'users') loadUsers(1);
-      else if (key === 'catalog') { loadPacks(); loadTiers(); loadPromos(); }
-      else if (key === 'transactions') loadTransactions(1);
       else if (key === 'settings') { loadTenants(); loadRules(); }
     }
 
@@ -4107,21 +3481,16 @@ const AdminPage = {
     return {
       tabs, activeTab, loading, saving, overview, formatDate,
       formatTokens, barHeight, statusColor, funnelSteps, trendSeries, trendDayLabels,
-      users, userSearch, userPage, userPages, userError, expandedUser, userDetail, userDetailLoading, userDetailPage,
-      inlineGrantAmount, inlineGrantMsg, inlineGrantError, loadUsers, toggleUserDetail, loadUserDetail, inlineGrant, jumpToUser,
+      users, userSearch, userPage, userPages, userError, loadUsers,
       tenants, newTenantName, tenantError, editing, editName, renameError, createTenant, renameTenant, deleteTenant, assignTenant,
       rules, newRuleDomain, newRuleTenantId, ruleError, createRule, deleteRule,
-      creditPacks, packForm, packError, createPack, togglePack, deletePack,
-      timePassTiers, tierForm, tierError, createTier, toggleTier, deleteTier,
-      promoCodes, promoForm, promoError, createPromo, togglePromo, deletePromo,
-      adminTxns, txnSearch, adminTxnPage, adminTxnPages, loadTransactions,
       switchTab,
     };
   },
 };
 
 const AppLayout = {
-  components: { AppSidebar, ConfirmModal, PaywallModal },
+  components: { AppSidebar, ConfirmModal },
   template: `
     <div class="flex h-full overflow-hidden relative z-10">
       <div class="sidebar-backdrop" :class="{ visible: sidebarOpen }" @click="closeSidebar"></div>
@@ -4136,7 +3505,6 @@ const AppLayout = {
         </router-view>
       </div>
       <ConfirmModal />
-      <PaywallModal />
     </div>
   `,
   setup() {
@@ -4737,257 +4105,6 @@ const RoastPage = {
 // ================================================================
 // ROUTER
 // ================================================================
-// ================================================================
-// PAGES — Credit History
-// ================================================================
-const CreditHistoryPage = {
-  components: { PaginationControls },
-  template: `
-    <div>
-      <TopHeader>
-        <template #left>
-          <div>
-            <h1 class="text-sm font-bold text-white font-mono tracking-tight">CREDITS</h1>
-            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your credits & purchases</p>
-          </div>
-        </template>
-        <template #right>
-          <div class="flex items-center gap-3">
-            <div class="text-right hidden md:block">
-              <span class="kpi-label">Available</span>
-              <span class="font-mono font-bold text-base ml-2" style="color:var(--orange)">{{ creditStore.displayBalance }}</span>
-            </div>
-          </div>
-        </template>
-      </TopHeader>
-      <div class="flex-1 overflow-y-auto p-4 md:p-6 page-scroll">
-        <div class="max-w-4xl mx-auto">
-
-          <!-- Balance hero -->
-          <div class="rounded-xl p-5 mb-6" style="background:linear-gradient(135deg, rgba(251,65,0,0.08), rgba(1,169,219,0.06));border:1px solid rgba(251,65,0,0.12);">
-            <div class="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Purchased</p>
-                <p class="font-mono font-bold text-3xl text-white">{{ creditStore.balance }}</p>
-              </div>
-              <div>
-                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Free Today</p>
-                <p class="font-mono font-bold text-3xl" style="color:var(--teal)">{{ creditStore.dailyFreeRemaining }}<span class="text-lg" style="color:var(--text-dim)">/{{ creditStore.dailyFreeTotal }}</span></p>
-              </div>
-              <div>
-                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Time Pass</p>
-                <p class="font-mono text-sm" style="color:var(--text-dim)">Coming Soon</p>
-              </div>
-            </div>
-            <!-- Low credits nudge -->
-            <div v-if="!creditStore.hasUnlimited && creditStore.balance === 0 && creditStore.dailyFreeRemaining === 0" class="mt-4 pt-3 border-t border-white/5 text-center">
-              <p class="text-xs font-mono" style="color:var(--orange)">Credit balances are still tracked here for purchases, promos, and admin workflows.</p>
-            </div>
-          </div>
-
-          <!-- How credits work -->
-          <div class="rounded-lg p-4 mb-6 flex items-start gap-3" style="background:rgba(1,169,219,0.04);border:1px solid rgba(1,169,219,0.1);">
-            <span style="font-size:18px;line-height:1;">&#9889;</span>
-            <div>
-              <p class="text-xs font-semibold text-white mb-1">Credits remain available in the product</p>
-              <p class="text-[11px]" style="color:var(--text-dim)">AI generation now uses your own Gemini API key from Settings. This page still handles purchases, promo codes, and existing balances.</p>
-            </div>
-          </div>
-
-          <!-- Credit Packs -->
-          <div v-if="packsLoading" class="flex justify-center py-8 mb-6"><div class="spinner"></div></div>
-          <div v-else-if="creditStore.packs.length || creditStore.timePasses.length" class="mb-6">
-            <div v-if="creditStore.packs.length" class="mb-6">
-              <div class="section-label mb-3">Credit Packs</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div v-for="(p, i) in creditStore.packs" :key="'pack-'+p.id"
-                     class="relative rounded-xl p-5 flex flex-col transition-all hover:scale-[1.02]"
-                     :style="bestPackIdx === i
-                       ? 'background:rgba(251,65,0,0.06);border:2px solid rgba(251,65,0,0.35);'
-                       : 'background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.06);'">
-                  <!-- Best value badge -->
-                  <div v-if="bestPackIdx === i" class="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider" style="background:var(--orange);color:white;">BEST VALUE</div>
-                  <div class="text-white text-sm font-semibold mb-1">{{ p.name }}</div>
-                  <div class="font-mono font-bold text-2xl text-white mb-1">{{ p.credits }} <span class="text-sm font-normal" style="color:var(--text-dim)">credits</span></div>
-                  <div class="text-[10px] font-mono mb-4" style="color:var(--teal)">{{ formatPricePerCredit(p) }}/credit</div>
-                  <button @click="buyPack('credit_pack', p.id, p.price_paise)" :disabled="buying || packsLoading"
-                          :class="bestPackIdx === i ? 'btn-primary' : 'btn-ghost'"
-                          class="w-full mt-auto text-sm">
-                    {{ buying ? '...' : formatPrice(p.price_paise) }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="creditStore.timePasses.length" class="opacity-50">
-              <div class="section-label mb-3">Time Passes — Unlimited Generations <span class="text-[9px] font-mono ml-1 px-1.5 py-0.5 rounded" style="background:rgba(1,169,219,0.15);color:var(--teal);">COMING SOON</span></div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div v-for="t in creditStore.timePasses" :key="'tp-'+t.id"
-                     class="rounded-xl p-5 flex flex-col"
-                     style="background:rgba(1,169,219,0.04);border:1px solid rgba(1,169,219,0.2);">
-                  <div class="text-white text-sm font-semibold mb-1">{{ t.name }}</div>
-                  <div class="flex items-baseline gap-2 mb-1">
-                    <span class="font-mono font-bold text-2xl text-white">{{ t.duration_days }}</span>
-                    <span class="text-sm" style="color:var(--text-dim)">days</span>
-                  </div>
-                  <div class="text-[10px] font-mono mb-4" style="color:var(--teal)">Unlimited resume generations</div>
-                  <div class="w-full mt-auto text-center text-[10px] font-mono py-2" style="color:var(--text-dim);">{{ formatPrice(t.price_paise) }}</div>
-                </div>
-              </div>
-            </div>
-
-            <p v-if="buyError" class="text-xs mt-3 font-mono" style="color:var(--red)">{{ buyError }}</p>
-            <p v-if="buySuccess" class="text-xs mt-3 font-mono" style="color:var(--green)">{{ buySuccess }}</p>
-          </div>
-
-          <!-- Promo code — compact inline -->
-          <div class="rounded-lg p-4 mb-6 flex items-center gap-3 flex-wrap" style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.04);">
-            <span class="text-[10px] font-mono font-bold tracking-widest uppercase shrink-0" style="color:var(--text-dim)">Promo Code</span>
-            <input v-model="promoCode" class="input-field input-mono flex-1" style="min-width:140px;" placeholder="Enter code" @keyup.enter="redeem" />
-            <button @click="redeem" class="btn-ghost text-xs" :disabled="!promoCode.trim() || redeeming || packsLoading">{{ redeeming ? 'APPLYING...' : 'APPLY' }}</button>
-            <p v-if="promoMsg" class="w-full text-xs font-mono mt-1" :style="{ color: promoIsError ? 'var(--red)' : 'var(--green)' }">{{ promoMsg }}</p>
-          </div>
-
-          <!-- Transactions — collapsible -->
-          <div class="mb-6">
-            <button @click="showHistory = !showHistory" class="flex items-center gap-2 mb-3 group cursor-pointer" style="background:none;border:none;padding:0;">
-              <span class="section-label">Transaction History</span>
-              <svg :style="{ transform: showHistory ? 'rotate(180deg)' : 'rotate(0)' }" style="transition:transform 0.2s;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-              <span class="text-[10px] font-mono" style="color:var(--text-dim)">{{ creditStore.txnTotal }} entries</span>
-            </button>
-            <div v-if="showHistory" class="widget-card">
-              <div v-if="creditStore.loading" class="flex items-center justify-center py-8"><div class="spinner"></div></div>
-              <div v-else-if="creditStore.transactions.length === 0" class="empty-state"><p class="text-sm">No transactions yet</p></div>
-              <div class="overflow-x-auto" v-else>
-                <table class="data-table" style="min-width:500px;">
-                  <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th></tr></thead>
-                  <tbody>
-                    <tr v-for="t in creditStore.transactions" :key="t.id">
-                      <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ formatDate(t.created_at, { includeTime: true }) }}</td>
-                      <td><span class="badge badge-processing">{{ t.type }}</span></td>
-                      <td :style="{ color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' }" class="font-mono font-bold">{{ t.amount >= 0 ? '+' : '' }}{{ t.amount }}</td>
-                      <td class="text-[11px]" style="color:var(--text-dim)">{{ t.description || '-' }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <PaginationControls v-if="creditStore.txnPages > 1" :page="creditStore.txnPage" :totalPages="creditStore.txnPages" @go="goPage" />
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  `,
-  setup() {
-    const creditStore = useCreditStore();
-    const promoCode = ref('');
-    const promoMsg = ref('');
-    const promoIsError = ref(false);
-    const redeeming = ref(false);
-    const buying = ref(false);
-    const buyError = ref(null);
-    const buySuccess = ref(null);
-    const packsLoading = ref(false);
-    const showHistory = ref(false);
-    let successTimer = null;
-
-    // Best-value pack = lowest price per credit
-    const bestPackIdx = computed(() => {
-      if (!creditStore.packs.length) return -1;
-      let best = 0;
-      let bestRatio = Infinity;
-      creditStore.packs.forEach((p, i) => {
-        const ratio = p.price_paise / p.credits;
-        if (ratio < bestRatio) { bestRatio = ratio; best = i; }
-      });
-      return creditStore.packs.length > 1 ? best : -1;
-    });
-
-    onMounted(async () => {
-      creditStore.fetchBalance();
-      creditStore.fetchHistory(1, '');
-      packsLoading.value = true;
-      await creditStore.fetchPacks();
-      packsLoading.value = false;
-    });
-
-    onUnmounted(() => {
-      if (successTimer) clearTimeout(successTimer);
-    });
-
-    function formatPrice(paise) { return '\u20B9' + (paise / 100).toFixed(0); }
-    function formatPricePerCredit(pack) { return '\u20B9' + (pack.price_paise / pack.credits / 100).toFixed(1); }
-
-    function goPage(n) { creditStore.fetchHistory(n, ''); }
-
-    async function buyPack(itemType, itemId, amountPaise) {
-      if (typeof Razorpay === 'undefined') {
-        buyError.value = 'Payment gateway not loaded. Please refresh the page.';
-        return;
-      }
-      buying.value = true;
-      buyError.value = null;
-      buySuccess.value = null;
-      try {
-        const order = await api.post('/payments/create-order', { item_type: itemType, item_id: itemId });
-        const options = {
-          key: order.razorpay_key_id,
-          amount: order.amount_paise,
-          currency: order.currency,
-          order_id: order.order_id,
-          name: 'ATS Beater',
-          description: itemType === 'credit_pack' ? 'Credit Pack' : 'Time Pass',
-          handler: async function(response) {
-            try {
-              await api.post('/payments/verify', {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              });
-              await creditStore.fetchBalance();
-              creditStore.fetchHistory(1, '');
-              buySuccess.value = 'Purchase successful! Credits have been added.';
-              if (successTimer) clearTimeout(successTimer);
-              successTimer = setTimeout(() => { buySuccess.value = null; }, 5000);
-            } catch (e) {
-              buyError.value = 'Payment verification failed: ' + e.message;
-            }
-            buying.value = false;
-          },
-          modal: {
-            ondismiss: function() { buying.value = false; },
-          },
-          theme: { color: '#FB4100' },
-        };
-        const rzp = new Razorpay(options);
-        rzp.open();
-      } catch (e) {
-        buyError.value = e.message;
-        buying.value = false;
-      }
-    }
-
-    async function redeem() {
-      if (!promoCode.value.trim() || redeeming.value) return;
-      redeeming.value = true;
-      promoMsg.value = '';
-      promoIsError.value = false;
-      try {
-        const result = await creditStore.redeemPromo(promoCode.value);
-        promoMsg.value = result.message;
-        promoCode.value = '';
-        creditStore.fetchHistory(1, '');
-      } catch(e) {
-        promoMsg.value = e.message;
-        promoIsError.value = true;
-      }
-      redeeming.value = false;
-    }
-
-    return { creditStore, promoCode, promoMsg, promoIsError, redeeming, buying, buyError, buySuccess, packsLoading, showHistory, bestPackIdx, formatDate, formatPrice, formatPricePerCredit, goPage, redeem, buyPack };
-  },
-};
 
 const SettingsPage = {
   template: `
@@ -5516,7 +4633,6 @@ const routes = [
       { path: 'jobs/view', component: JobDetailPage },
       { path: 'roast', component: RoastPage },
       { path: 'settings', component: SettingsPage },
-      { path: 'credits', component: CreditHistoryPage },
       { path: 'admin', component: AdminPage, meta: { requiresSuperAdmin: true } },
     ],
   },

@@ -26,8 +26,6 @@ dependencies = [
     "cryptography>=42.0.0",
     # Storage
     "google-cloud-storage>=2.16.0",
-    # Payments
-    "razorpay>=1.4.0",
     # Chat (ADK + JSON Patch)
     "google-adk>=1.0.0",
     "jsonpatch>=1.33",

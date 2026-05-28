@@ -22,7 +22,6 @@ class User(TimestampMixin, Base):
 
     profiles = relationship("Profile", back_populates="user")
     jobs = relationship("Job", back_populates="user")
-    credit = relationship("UserCredit", back_populates="user", uselist=False)
     tenant = relationship("Tenant", back_populates="users")
     roasts = relationship("Roast", back_populates="user")
     ai_settings = relationship(

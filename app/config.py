@@ -19,14 +19,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 24
 
-    # Razorpay
-    RAZORPAY_KEY_ID: str = ""
-    RAZORPAY_KEY_SECRET: str = ""
-    RAZORPAY_WEBHOOK_SECRET: str = ""
-
-    # Credits
-    DAILY_FREE_CREDITS: int = 3
-
     # Storage
     GCS_BUCKET: str = "your-gcs-bucket"
     GCS_CREDENTIALS_PATH: str = "credentials/gcs-service-account.json"

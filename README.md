@@ -44,9 +44,9 @@ stateDiagram-v2
 - **AI Resume Tailoring** — Gemini Pro tailors your resume for each specific job description
 - **LaTeX PDF Generation** — Professional typesetting that passes ATS parsing reliably
 - **AI Chat Editor** — Refine your resume through conversation (powered by Google ADK)
-- **Credit System** — Daily free credits + purchasable credit packs via Razorpay
+- **Bring Your Own Key (BYOK)** — Users supply their own Gemini API key in Settings; the app is free
 - **Multi-tenancy** — Organization labeling with auto-assignment via email domain rules
-- **Admin Panel** — Full CRUD for users, tenants, credits, promo codes, transactions
+- **Admin Panel** — Manage users, tenants, domain rules, LLM request log, and share analytics
 - **Shareable Roast Links** — Share your resume roast results with a public link
 
 ## Tech Stack
@@ -58,7 +58,6 @@ stateDiagram-v2
 | PDF | pdflatex + custom `resume.cls`, pdfplumber for extraction |
 | Frontend | Vue 3 + Tailwind CSS + Pinia — all via CDN, no build step |
 | Auth | Google OAuth 2.0 → JWT |
-| Payments | Razorpay (credit packs, time passes) |
 | Storage | Google Cloud Storage |
 | Package mgr | [UV](https://docs.astral.sh/uv/) |
 
@@ -101,9 +100,8 @@ Open **http://localhost:8000**. Set `DEV_AUTH_BYPASS=true` in `.env` to skip Goo
 
 | Key | Where to get it |
 |-----|----------------|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) — optional, only used by integration smoke tests |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) — create OAuth 2.0 credentials |
-| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | [Razorpay Dashboard](https://dashboard.razorpay.com/) (optional — for payments) |
 
 ## Running Tests
 
@@ -115,7 +113,7 @@ uv run pytest tests/ -v --ignore=tests/integration
 INTEGRATION=1 uv run pytest tests/integration/ -v
 ```
 
-173 unit tests covering models, schemas, API routes, LaTeX builder/sanitizer, JWT handler, credit service, and more.
+Unit tests cover models, schemas, API routes, LaTeX builder/sanitizer, JWT handler, AI settings service, and more.
 
 ## Project Structure
 
@@ -124,17 +122,16 @@ app/
   main.py                  # FastAPI factory, CORS, exception handlers
   config.py                # Pydantic BaseSettings from .env
   dependencies.py          # Auth (JWT/dev bypass), DB session
-  models/                  # SQLAlchemy ORM (User, Profile, Job, Credit, Roast, Tenant)
+  models/                  # SQLAlchemy ORM (User, Profile, Job, Roast, Tenant, ChatMessage, etc.)
   schemas/                 # Pydantic schemas (ResumeInfo, CustomResumeInfo, etc.)
   services/
-    ai/                    # Gemini inference + prompts + retry
+    ai/                    # Gemini inference + prompts + retry + per-user BYOK settings
     ocr/                   # PDF text extraction (pdfplumber + Gemini vision fallback)
     latex/                 # LaTeX builder, compiler, sanitizer
     chat/                  # AI chat agents (Google ADK) for resume editing
     profile/               # Profile CRUD + background processing
     job/                   # Job generation (Phase 1 + Phase 2)
-    credit/                # Credit balance, deduction, refund, promo codes
-    payment/               # Razorpay integration
+    roast/                 # Free resume roast / critique flow
     storage/               # GCS upload/download
   api/                     # FastAPI route handlers
 
@@ -143,7 +140,7 @@ frontend/
   landing.html             # Public landing page
   static/js/app.js         # Entire Vue 3 app (stores, pages, router)
 
-tests/                     # 173 unit tests + integration smoke tests
+tests/                     # Unit tests + integration smoke tests
 alembic/                   # Database migrations
 resume.cls                 # LaTeX document class
 infra/                     # Docker, Cloud Run deploy script, entrypoint
@@ -157,6 +154,7 @@ infra/                     # Docker, Cloud Run deploy script, entrypoint
 | GET | `/auth/google/login` | Returns Google OAuth URL |
 | GET | `/auth/google/callback` | Exchanges auth code, redirects with JWT |
 | GET | `/auth/me` | Current user info |
+| GET / PUT / DELETE | `/auth/ai-settings` | Manage the user's saved Gemini API key + model |
 
 ### Profiles
 | Method | Path | Description |
@@ -171,7 +169,7 @@ infra/                     # Docker, Cloud Run deploy script, entrypoint
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/jobs/` | Create job (profile_id + job description) |
-| POST | `/jobs/{id}/generate-resume` | Trigger AI tailoring (202, deducts credit) |
+| POST | `/jobs/{id}/generate-resume` | Trigger AI tailoring (202; requires saved AI settings) |
 | POST | `/jobs/{id}/generate-pdf` | Trigger LaTeX compilation (202) |
 | GET | `/jobs/{id}/pdf` | Download generated PDF |
 | GET | `/jobs/{id}` | Get job details |
@@ -184,17 +182,8 @@ infra/                     # Docker, Cloud Run deploy script, entrypoint
 | GET | `/roasts/` | List roasts (paginated) |
 | GET | `/roasts/shared/{share_id}` | Public shared roast (no auth) |
 
-### Credits & Payments
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/credits/packs` | List credit packs (public) |
-| GET | `/credits/me` | Balance + daily free + active pass |
-| POST | `/credits/redeem-promo` | Redeem promo code |
-| POST | `/payments/create-order` | Create Razorpay order |
-| POST | `/payments/verify` | Verify payment + credit account |
-
 ### Admin
-Full CRUD for tenants, users, domain rules, credit packs, time passes, promo codes, and transactions under `/admin/*`. Requires `is_super_admin` flag.
+CRUD for tenants, users, and domain rules under `/admin/*`, plus the LLM request log and roast share analytics. Requires `is_super_admin` flag.
 
 ## Admin & Roles
 
@@ -207,12 +196,10 @@ UPDATE users SET is_super_admin = true WHERE email = 'your-email@example.com';
 ```
 
 Once set, the **Admin** tab appears in the sidebar. Super admins can:
-- View dashboard KPIs (users, jobs, revenue, LLM usage)
-- Manage users (search, assign tenants, grant credits)
-- Create/edit credit packs and time passes
-- Create/manage promo codes
-- View all transactions
+- View dashboard KPIs (users, jobs, LLM usage)
+- Manage users (search, assign tenants)
 - Manage tenants and domain rules
+- Inspect the LLM request log and roast share analytics
 
 ### Multi-Tenancy & Domain Rules
 
@@ -240,25 +227,15 @@ INSERT INTO tenant_domain_rules (tenant_id, domain)
 
 Or do it via the Admin UI → Settings tab → Tenants & Domain Rules.
 
-## Credit System
+## Bring Your Own Key (BYOK)
 
-| Priority | Source | Details |
-|----------|--------|---------|
-| 1 | Active time pass | Unlimited (no deduction) |
-| 2 | Daily free | 3/day (configurable), resets at midnight UTC |
-| 3 | Purchased credits | From balance |
-| 4 | No credits | 429 error, frontend shows paywall |
+The app is free. Every Gemini call is made against the API key the signed-in user saved in Settings; there is no server-wide fallback at request time.
 
-Credits are deducted synchronously before generation starts. If generation fails, a refund is issued automatically.
-
-### Promo Codes
-
-Admins can create promo codes from the Admin panel:
-- **CREDITS type** — adds N credits to the user's balance
-- **TIME_PASS type** — activates a time pass tier (unlimited generations for N days)
-- One redemption per user per code
-- Optional max total redemptions and expiry date
-- Time passes stack: if a user buys a second pass while one is active, the new pass starts at the old expiry
+- Users obtain a key from [Google AI Studio](https://aistudio.google.com/apikey) and paste it into Settings.
+- The key is encrypted at rest with a Fernet key (`USER_API_KEY_ENCRYPTION_KEY`).
+- Before saving, the backend validates the key + model with a live Gemini call.
+- Until a key is saved, AI features (tailoring, roast, chat, profile parsing) return a 400 `ai_setup_required` error and the frontend prompts the user to add one.
+- The `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` / `GEMINI_API_KEY` env vars are only used by `infra/preflight.py` and integration smoke tests — they are not in the request path.
 
 ## AI Chat Agents
 
@@ -282,7 +259,7 @@ Chat history is stored via ADK's `DatabaseSessionService` in PostgreSQL (`sessio
 
 ## Resume Roast
 
-Free feature — no credits required. Users upload a PDF and get:
+Free AI-powered resume critique. Users upload a PDF and get:
 1. **Comedic roast** — AI-generated roast points about the resume
 2. **ATS readiness checklist** — 8 criteria (machine readability, contact info, skills, dates, etc.)
 3. **Shareable link** — public URL with OG meta tags for social sharing
@@ -338,25 +315,21 @@ For production, you'll need:
 - PostgreSQL instance (Cloud SQL or self-hosted)
 - GCS bucket for PDF storage
 - Google OAuth credentials with correct redirect URI
-- Razorpay keys (optional — for payments)
 
 ## Environment Variables Reference
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL async connection string (`postgresql+asyncpg://...`) |
-| `GEMINI_API_KEY` | Yes | — | Google AI API key from [AI Studio](https://aistudio.google.com/apikey) |
-| `GEMINI_FLASH_MODEL` | No | `gemini-3-flash-preview` | Model for profile structuring, roasts, and chat |
-| `GEMINI_PRO_MODEL` | No | `gemini-3.1-pro-preview` | Model for resume tailoring (higher quality) |
+| `GEMINI_API_KEY` | No | — | Optional Google AI API key; only used by `infra/preflight.py` and integration smoke tests (runtime uses per-user keys) |
+| `GEMINI_FLASH_MODEL` | No | `gemini-3-flash-preview` | Default model name for smoke tests |
+| `GEMINI_PRO_MODEL` | No | `gemini-3.1-pro-preview` | Default model name for smoke tests |
+| `USER_API_KEY_ENCRYPTION_KEY` | Yes | — | Fernet key used to encrypt users' saved Gemini API keys at rest |
 | `GOOGLE_CLIENT_ID` | Prod | — | Google OAuth 2.0 client ID |
 | `GOOGLE_CLIENT_SECRET` | Prod | — | Google OAuth 2.0 client secret |
 | `JWT_SECRET` | Yes | `change-this-secret` | Secret for signing JWTs (min 32 chars in production) |
 | `JWT_ALGORITHM` | No | `HS256` | JWT signing algorithm |
 | `JWT_EXPIRY_HOURS` | No | `24` | JWT token expiry in hours |
-| `RAZORPAY_KEY_ID` | No | — | Razorpay key ID (skip to disable payments) |
-| `RAZORPAY_KEY_SECRET` | No | — | Razorpay key secret |
-| `RAZORPAY_WEBHOOK_SECRET` | No | — | Razorpay webhook signature secret |
-| `DAILY_FREE_CREDITS` | No | `3` | Free resume generations per user per day |
 | `GCS_BUCKET` | No | — | GCS bucket name for PDF storage (skip for local-only) |
 | `GCS_CREDENTIALS_PATH` | No | — | Path to GCS service account JSON (uses ADC if omitted) |
 | `LATEX_BIN_PATH` | No | `/Library/TeX/texbin` | Directory containing `pdflatex` binary |

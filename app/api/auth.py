@@ -1,4 +1,4 @@
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request, Header
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +8,6 @@ from app.config import get_settings
 from app.models.user import User
 from app.models.ai_settings import UserAISettings
 from app.models.tenant import Tenant, TenantDomainRule
-from app.models.credit import UserCredit
 from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdateRequest
 from app.services.auth import google_oauth
 from app.services.ai.user_settings import AISettingsService
@@ -80,18 +79,8 @@ async def google_callback(
             tenant_id=tenant_id,
         )
         db.add(user)
-        await db.flush()  # flush to get user.id
-        await db.refresh(user)
-
-        # Create UserCredit row for new user (same transaction)
-        user_credit = UserCredit(
-            user_id=user.id,
-            balance=0,
-            daily_free_used=0,
-            daily_free_reset_date=datetime.now(timezone.utc).date(),
-        )
-        db.add(user_credit)
         await db.commit()
+        await db.refresh(user)
     else:
         user.name = name
         user.picture_url = picture

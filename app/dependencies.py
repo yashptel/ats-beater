@@ -1,6 +1,6 @@
 import hashlib
 import struct
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from fastapi import Depends, Header
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,6 @@ from app.database.session import get_db
 from app.config import get_settings, Settings
 from app.services.auth.jwt_handler import verify_token
 from app.models import User
-from app.models.credit import UserCredit
 from app.exceptions import AuthenticationError, ForbiddenError
 
 DEV_USER_GOOGLE_ID = "dev-bypass-user"
@@ -31,19 +30,6 @@ async def _get_or_create_dev_user(db: AsyncSession) -> User:
         db.add(user)
         await db.commit()
         await db.refresh(user)
-
-    # Ensure UserCredit row exists
-    uc_result = await db.execute(select(UserCredit).where(UserCredit.user_id == user.id))
-    if not uc_result.scalar_one_or_none():
-        uc = UserCredit(
-            user_id=user.id,
-            balance=0,
-            daily_free_used=0,
-            daily_free_reset_date=datetime.now(timezone.utc).date(),
-        )
-        db.add(uc)
-        await db.commit()
-
     return user
 
 

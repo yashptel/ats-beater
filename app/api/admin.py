@@ -2,7 +2,6 @@ import math
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func, or_, distinct
 
 from app.database.session import get_db
@@ -12,10 +11,6 @@ from app.models.tenant import Tenant, TenantDomainRule
 from app.models.job import Job, JobStatus
 from app.models.profile import Profile
 from app.models.roast import Roast, RoastStatus
-from app.models.credit import (
-    CreditPack, TimePassTier, PromoCode, CreditTransaction,
-    UserCredit, UserTimePass, TransactionType,
-)
 from app.models.token_usage import LLMRequest
 from app.models.roast_view import RoastView
 from app.exceptions import NotFoundError
@@ -28,17 +23,8 @@ from app.schemas.tenant import (
     AssignTenantRequest,
     UserAdminResponse,
 )
-from app.schemas.credit import (
-    CreditPackCreate, CreditPackUpdate, CreditPackResponse,
-    TimePassTierCreate, TimePassTierUpdate, TimePassTierResponse,
-    PromoCodeCreate, PromoCodeUpdate, PromoCodeResponse,
-    AdminGrantRequest, AdminTransactionResponse,
-)
-from app.services.credit.service import CreditService
-from app.config import get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-credit_service = CreditService()
 
 
 def _paginate(items, total, page, size):
@@ -92,37 +78,12 @@ async def admin_overview(
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # ── Existing KPIs ──
     total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
     total_jobs = (await db.execute(select(func.count(Job.id)))).scalar() or 0
     completed_jobs = (await db.execute(
         select(func.count(Job.id)).where(Job.status == JobStatus.READY)
     )).scalar() or 0
 
-    total_purchase_txns = (await db.execute(
-        select(func.count(CreditTransaction.id)).where(
-            CreditTransaction.type.in_([
-                TransactionType.CREDIT_PURCHASE,
-                TransactionType.TIME_PASS_PURCHASE,
-            ])
-        )
-    )).scalar() or 0
-
-    active_passes = (await db.execute(
-        select(func.count(UserTimePass.id)).where(
-            UserTimePass.starts_at <= now,
-            UserTimePass.expires_at > now,
-        )
-    )).scalar() or 0
-
-    consumed_today = (await db.execute(
-        select(func.count(CreditTransaction.id)).where(
-            CreditTransaction.type == TransactionType.CONSUMPTION,
-            CreditTransaction.created_at >= today_start,
-        )
-    )).scalar() or 0
-
-    # ── New KPIs ──
     total_profiles = (await db.execute(
         select(func.count(Profile.id)).where(Profile.is_active.is_(True))
     )).scalar() or 0
@@ -235,30 +196,10 @@ async def admin_overview(
         "roasts": roast_counts,
     }
 
-    # ── Recent activity (unchanged) ──
-    recent_result = await db.execute(
-        select(CreditTransaction, User.email)
-        .join(User, CreditTransaction.user_id == User.id)
-        .order_by(CreditTransaction.created_at.desc())
-        .limit(10)
-    )
-    recent = [
-        {
-            "id": txn.id, "user_email": email,
-            "amount": txn.amount, "type": txn.type.value,
-            "description": txn.description,
-            "created_at": txn.created_at.isoformat(),
-        }
-        for txn, email in recent_result.all()
-    ]
-
     return {
         "total_users": total_users,
         "total_jobs": total_jobs,
         "completed_jobs": completed_jobs,
-        "total_purchase_txns": total_purchase_txns,
-        "active_time_passes": active_passes,
-        "consumed_today": consumed_today,
         "total_profiles": total_profiles,
         "total_roasts": total_roasts,
         "new_users_today": new_users_today,
@@ -268,7 +209,6 @@ async def admin_overview(
         "funnel": funnel,
         "llm_summary": llm_summary,
         "trends": trends,
-        "recent_activity": recent,
     }
 
 
@@ -369,21 +309,15 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(get_super_admin),
 ):
-    now = datetime.now(timezone.utc)
-    settings = get_settings()
-
     base = (
         select(
             User,
             Tenant.name.label("tenant_name"),
-            UserCredit.balance,
-            UserCredit.daily_free_used,
             func.count(Job.id).label("job_count"),
         )
         .outerjoin(Tenant, User.tenant_id == Tenant.id)
-        .outerjoin(UserCredit, UserCredit.user_id == User.id)
         .outerjoin(Job, Job.user_id == User.id)
-        .group_by(User.id, Tenant.name, UserCredit.balance, UserCredit.daily_free_used)
+        .group_by(User.id, Tenant.name)
     )
     if search:
         pattern = f"%{search}%"
@@ -402,39 +336,15 @@ async def list_users(
         base.order_by(User.created_at.desc()).offset(offset).limit(size)
     )).all()
 
-    # Batch-fetch active time passes for users in this page
-    user_ids = [row[0].id for row in rows]
-    active_passes = {}
-    if user_ids:
-        tp_result = await db.execute(
-            select(UserTimePass, TimePassTier.name)
-            .join(TimePassTier, UserTimePass.tier_id == TimePassTier.id)
-            .where(
-                UserTimePass.user_id.in_(user_ids),
-                UserTimePass.starts_at <= now,
-                UserTimePass.expires_at > now,
-            )
-            .order_by(UserTimePass.expires_at.desc())
-        )
-        for utp, tier_name in tp_result.all():
-            if utp.user_id not in active_passes:
-                active_passes[utp.user_id] = {
-                    "tier_name": tier_name,
-                    "expires_at": utp.expires_at.isoformat(),
-                }
-
     items = [
         {
             "id": u.id, "email": u.email, "name": u.name,
             "is_super_admin": u.is_super_admin,
             "tenant_id": u.tenant_id, "tenant_name": tname,
-            "balance": balance or 0,
-            "daily_free_remaining": max(0, settings.DAILY_FREE_CREDITS - (daily_used or 0)),
             "job_count": job_count,
-            "active_time_pass": active_passes.get(u.id),
             "created_at": u.created_at.isoformat(),
         }
-        for u, tname, balance, daily_used, job_count in rows
+        for u, tname, job_count in rows
     ]
     return _paginate(items, total, page, size)
 
@@ -540,362 +450,6 @@ async def delete_domain_rule(
         raise NotFoundError(f"Domain rule {rule_id} not found")
     await db.delete(rule)
     await db.commit()
-
-
-# ── Credit Packs ─────────────────────────────────────────────────
-
-@router.get("/credit-packs")
-async def list_credit_packs(
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=200),
-    search: str = Query("", max_length=100),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    base = select(CreditPack)
-    if search:
-        base = base.where(CreditPack.name.ilike(f"%{search}%"))
-
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar() or 0
-
-    offset = (page - 1) * size
-    result = await db.execute(
-        base.order_by(CreditPack.sort_order, CreditPack.id).offset(offset).limit(size)
-    )
-    items = [
-        {
-            "id": p.id, "name": p.name, "credits": p.credits,
-            "price_paise": p.price_paise, "is_active": p.is_active,
-            "sort_order": p.sort_order, "created_at": p.created_at.isoformat(),
-        }
-        for p in result.scalars().all()
-    ]
-    return _paginate(items, total, page, size)
-
-
-@router.post("/credit-packs", status_code=201)
-async def create_credit_pack(
-    body: CreditPackCreate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    pack = CreditPack(**body.model_dump())
-    db.add(pack)
-    await db.commit()
-    await db.refresh(pack)
-    return {
-        "id": pack.id, "name": pack.name, "credits": pack.credits,
-        "price_paise": pack.price_paise, "is_active": pack.is_active,
-        "sort_order": pack.sort_order, "created_at": pack.created_at.isoformat(),
-    }
-
-
-@router.put("/credit-packs/{pack_id}")
-async def update_credit_pack(
-    pack_id: int,
-    body: CreditPackUpdate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    pack = await db.get(CreditPack, pack_id)
-    if not pack:
-        raise NotFoundError(f"Credit pack {pack_id} not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(pack, field, value)
-    await db.commit()
-    await db.refresh(pack)
-    return {
-        "id": pack.id, "name": pack.name, "credits": pack.credits,
-        "price_paise": pack.price_paise, "is_active": pack.is_active,
-        "sort_order": pack.sort_order, "created_at": pack.created_at.isoformat(),
-    }
-
-
-@router.delete("/credit-packs/{pack_id}", status_code=204)
-async def delete_credit_pack(
-    pack_id: int,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    pack = await db.get(CreditPack, pack_id)
-    if not pack:
-        raise NotFoundError(f"Credit pack {pack_id} not found")
-    await db.delete(pack)
-    await db.commit()
-
-
-# ── Time Pass Tiers ──────────────────────────────────────────────
-
-@router.get("/time-pass-tiers")
-async def list_time_pass_tiers(
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=200),
-    search: str = Query("", max_length=100),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    base = select(TimePassTier)
-    if search:
-        base = base.where(TimePassTier.name.ilike(f"%{search}%"))
-
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar() or 0
-
-    offset = (page - 1) * size
-    result = await db.execute(
-        base.order_by(TimePassTier.sort_order, TimePassTier.id).offset(offset).limit(size)
-    )
-    items = [
-        {
-            "id": t.id, "name": t.name, "duration_days": t.duration_days,
-            "price_paise": t.price_paise, "is_active": t.is_active,
-            "sort_order": t.sort_order, "created_at": t.created_at.isoformat(),
-        }
-        for t in result.scalars().all()
-    ]
-    return _paginate(items, total, page, size)
-
-
-@router.post("/time-pass-tiers", status_code=201)
-async def create_time_pass_tier(
-    body: TimePassTierCreate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    tier = TimePassTier(**body.model_dump())
-    db.add(tier)
-    await db.commit()
-    await db.refresh(tier)
-    return {
-        "id": tier.id, "name": tier.name, "duration_days": tier.duration_days,
-        "price_paise": tier.price_paise, "is_active": tier.is_active,
-        "sort_order": tier.sort_order, "created_at": tier.created_at.isoformat(),
-    }
-
-
-@router.put("/time-pass-tiers/{tier_id}")
-async def update_time_pass_tier(
-    tier_id: int,
-    body: TimePassTierUpdate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    tier = await db.get(TimePassTier, tier_id)
-    if not tier:
-        raise NotFoundError(f"Time pass tier {tier_id} not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(tier, field, value)
-    await db.commit()
-    await db.refresh(tier)
-    return {
-        "id": tier.id, "name": tier.name, "duration_days": tier.duration_days,
-        "price_paise": tier.price_paise, "is_active": tier.is_active,
-        "sort_order": tier.sort_order, "created_at": tier.created_at.isoformat(),
-    }
-
-
-@router.delete("/time-pass-tiers/{tier_id}", status_code=204)
-async def delete_time_pass_tier(
-    tier_id: int,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    tier = await db.get(TimePassTier, tier_id)
-    if not tier:
-        raise NotFoundError(f"Time pass tier {tier_id} not found")
-    try:
-        await db.delete(tier)
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise ValueError(
-            f"Cannot delete tier '{tier.name}' — it has associated user time passes. "
-            "Deactivate it instead."
-        )
-
-
-# ── Promo Codes ──────────────────────────────────────────────────
-
-@router.get("/promo-codes")
-async def list_promo_codes(
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=200),
-    search: str = Query("", max_length=100),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    base = select(PromoCode)
-    if search:
-        base = base.where(PromoCode.code.ilike(f"%{search}%"))
-
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar() or 0
-
-    offset = (page - 1) * size
-    result = await db.execute(
-        base.order_by(PromoCode.created_at.desc()).offset(offset).limit(size)
-    )
-    items = [
-        {
-            "id": p.id, "code": p.code, "type": p.type.value,
-            "value": p.value, "max_redemptions": p.max_redemptions,
-            "current_redemptions": p.current_redemptions,
-            "is_active": p.is_active,
-            "expires_at": p.expires_at.isoformat() if p.expires_at else None,
-            "created_at": p.created_at.isoformat(),
-        }
-        for p in result.scalars().all()
-    ]
-    return _paginate(items, total, page, size)
-
-
-@router.post("/promo-codes", status_code=201)
-async def create_promo_code(
-    body: PromoCodeCreate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    # Check uniqueness
-    existing = await db.execute(
-        select(PromoCode).where(PromoCode.code == body.code)
-    )
-    if existing.scalar_one_or_none():
-        raise ValueError(f"Promo code '{body.code}' already exists")
-
-    promo = PromoCode(**body.model_dump())
-    db.add(promo)
-    await db.commit()
-    await db.refresh(promo)
-    return {
-        "id": promo.id, "code": promo.code, "type": promo.type.value,
-        "value": promo.value, "max_redemptions": promo.max_redemptions,
-        "current_redemptions": promo.current_redemptions,
-        "is_active": promo.is_active,
-        "expires_at": promo.expires_at.isoformat() if promo.expires_at else None,
-        "created_at": promo.created_at.isoformat(),
-    }
-
-
-@router.put("/promo-codes/{promo_id}")
-async def update_promo_code(
-    promo_id: int,
-    body: PromoCodeUpdate,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    promo = await db.get(PromoCode, promo_id)
-    if not promo:
-        raise NotFoundError(f"Promo code {promo_id} not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(promo, field, value)
-    await db.commit()
-    await db.refresh(promo)
-    return {
-        "id": promo.id, "code": promo.code, "type": promo.type.value,
-        "value": promo.value, "max_redemptions": promo.max_redemptions,
-        "current_redemptions": promo.current_redemptions,
-        "is_active": promo.is_active,
-        "expires_at": promo.expires_at.isoformat() if promo.expires_at else None,
-        "created_at": promo.created_at.isoformat(),
-    }
-
-
-@router.delete("/promo-codes/{promo_id}", status_code=204)
-async def delete_promo_code(
-    promo_id: int,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    promo = await db.get(PromoCode, promo_id)
-    if not promo:
-        raise NotFoundError(f"Promo code {promo_id} not found")
-    await db.delete(promo)
-    await db.commit()
-
-
-# ── Admin Credit Management ──────────────────────────────────────
-
-@router.post("/credits/grant")
-async def admin_grant_credits(
-    body: AdminGrantRequest,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    user = await db.get(User, body.user_id)
-    if not user:
-        raise NotFoundError(f"User {body.user_id} not found")
-    uc = await credit_service.add_credits(
-        db, body.user_id, body.amount, TransactionType.ADMIN_GRANT,
-        description=body.description or f"Admin grant: {body.amount} credits",
-    )
-    await db.commit()
-    return {"status": "ok", "user_id": body.user_id, "new_balance": uc.balance}
-
-
-@router.get("/credits/user/{user_id}")
-async def admin_get_user_credits(
-    user_id: str,
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    user = await db.get(User, user_id)
-    if not user:
-        raise NotFoundError(f"User {user_id} not found")
-
-    balance = await credit_service.get_balance(db, user_id)
-    offset = (page - 1) * size
-    txns, total = await credit_service.get_transactions(
-        db, user_id, offset=offset, limit=size
-    )
-    return {
-        "user_id": user_id,
-        "email": user.email,
-        "name": user.name,
-        "balance": balance,
-        "transactions": _paginate(
-            [
-                {
-                    "id": t.id, "amount": t.amount, "type": t.type.value,
-                    "reference_id": t.reference_id,
-                    "razorpay_order_id": t.razorpay_order_id,
-                    "description": t.description,
-                    "created_at": t.created_at.isoformat(),
-                }
-                for t in txns
-            ],
-            total, page, size,
-        ),
-    }
-
-
-@router.get("/transactions")
-async def admin_list_transactions(
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=200),
-    search: str = Query("", max_length=100),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_super_admin),
-):
-    offset = (page - 1) * size
-    rows, total = await credit_service.get_all_transactions(
-        db, offset=offset, limit=size, search=search
-    )
-    items = [
-        {
-            "id": txn.id, "user_id": txn.user_id,
-            "user_email": email, "user_name": name,
-            "amount": txn.amount, "type": txn.type.value,
-            "reference_id": txn.reference_id,
-            "razorpay_order_id": txn.razorpay_order_id,
-            "description": txn.description,
-            "created_at": txn.created_at.isoformat(),
-        }
-        for txn, email, name in rows
-    ]
-    return _paginate(items, total, page, size)
 
 
 # ── LLM Requests ────────────────────────────────────────────────
