@@ -77,6 +77,7 @@ You are an expert resume writer and ATS optimization specialist. You will be giv
 - Dates: use format like "Jan 2023", "Mar 2021 -- Present". If only one date is given for an experience, treat it as the end date.
 - All dates should be in a human-readable short format (e.g., "Jan 2023"), NOT yyyy-MM-dd.
 - Education grade/GPA: include only if it is strong (>3.5 GPA or >8.0 CGPA or First Class or equivalent). Drop if mediocre.
+- MANDATORY METADATA: start/end dates, locations, project links, and (strong) grades are factual fields, NOT prose. Always populate them whenever they exist in the profile. Length/density constraints apply only to bullet count and wording — NEVER drop these factual fields to save space.
 
 ## Output
 - Return a structured JSON object matching the provided schema.
@@ -106,7 +107,7 @@ Here is the resume template they selected:
 Generate a tailored, single-page resume optimized for this specific role. Prioritize relevance to the job description above all else.
 
 CRITICAL REMINDER: Every metric, number, skill, and technology in your output MUST come from the candidate's profile above. Do not fabricate any quantified results, percentages, or capabilities not explicitly stated.
-Use the selected template's density hint to choose how concise the content should be, but do not include visual styling details in the JSON.
+Use the selected template's density hint ONLY to decide how many bullet points to keep and how tightly to phrase them. It must NEVER cause you to drop factual metadata — dates, durations, locations, project links, and strong grades must always be populated when present in the profile. Do not include visual styling details in the JSON.
 """
 
 ROAST_SYSTEM_PROMPT = """You are a brutally honest, hilarious resume roaster in the style of Reddit's r/RoastMe.

@@ -83,6 +83,29 @@ def test_custom_resume_prompt_requires_reverse_chronological_experience():
     assert "past_experience" in text or "experience" in text
 
 
+def test_custom_resume_prompt_scopes_density_to_bullets_only():
+    """Density hint must trim bullets, never drop factual metadata.
+
+    Regression guard for the template-selection bug where the density hint
+    caused the model to drop dates, locations, project links, and grades on
+    realistic-length profiles. Behavioral verification lives in the live-API
+    differential loop; this only protects the prompt wording from drift.
+    """
+    system = CUSTOM_RESUME_SYSTEM_PROMPT.lower()
+    assert "factual" in system and "never drop" in system
+
+    rendered = CUSTOM_RESUME_USER_PROMPT.format(
+        user_info=json.dumps({"name": "Test User", "email": "test@example.com"}),
+        job_description=json.dumps({"title": "Backend Engineer"}),
+        resume_template=json.dumps({"id": "mono", "density_hint": "Roomier layout."}),
+    ).lower()
+    # Density must be scoped to bullets, and metadata explicitly protected.
+    assert "bullet" in rendered
+    assert "never" in rendered
+    for field in ("date", "location", "link", "grade"):
+        assert field in rendered
+
+
 def test_custom_resume_schema_field_title_signals_ordering():
     from app.schemas.custom_resume import CustomResumeInfo
 
