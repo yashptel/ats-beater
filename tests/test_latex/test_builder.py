@@ -312,5 +312,9 @@ def test_build_resume_with_projects():
     assert "Projects" in latex
     assert "MyProject" in latex
     assert r"\resumeProjectHeading" in latex
-    assert r"\href{https://github.com/test}{\underline{\textbf{MyProject}}}" in latex
+    assert (
+        r"\resumeProjectHeading{\textbf{MyProject}}{\href{https://github.com/test}{github.com/\allowbreak{}test}}"
+        in latex
+    )
+    assert r"\href{https://github.com/test}{\underline{\textbf{MyProject}}}" not in latex
     assert "}{\\underline{Link}}" not in latex

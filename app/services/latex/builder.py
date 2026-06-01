@@ -369,9 +369,11 @@ def _add_experience(
 
 def _project_heading(project: CustomProject) -> tuple[str, str]:
     left = rf"\textbf{{{project.name}}}"
+    right = ""
     if _is_http_url(project.link):
-        left = _latex_link(project.link, rf"\textbf{{{project.name}}}")
-    return left, ""
+        label = _add_break_opportunities(handle_special_chars(_display_url(project.link)))
+        right = _latex_link(project.link, label, underline=False)
+    return left, right
 
 
 def _add_projects(
