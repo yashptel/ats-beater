@@ -1,4 +1,10 @@
-from app.schemas.custom_resume import CustomResumeInfo, CustomSkills, CustomExperience, CustomProject
+from app.schemas.custom_resume import (
+    CustomExperience,
+    CustomLink,
+    CustomProject,
+    CustomResumeInfo,
+    CustomSkills,
+)
 from app.services.latex.builder import build_resume
 from app.services.latex.sanitizer import sanitize_special_chars
 
@@ -53,6 +59,51 @@ def test_build_resume_hybrid_template_keeps_proportional_body():
     assert r"\usepackage{inconsolata}" in latex
     assert r"\renewcommand{\familydefault}{\ttdefault}" not in latex
     assert r"\section{SUMMARY}" in latex
+
+
+def test_build_resume_template_header_links_show_urls_not_platform_labels():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        links=[
+            CustomLink(name="LinkedIn", url="https://linkedin.com/in/johndoe"),
+            CustomLink(name="GitHub", url="https://github.com/johndoe"),
+        ],
+    )
+
+    latex = build_resume(info, template_id="mono")
+
+    assert (
+        r"\href{https://linkedin.com/in/johndoe}{\underline{linkedin.com/in/johndoe}}"
+        in latex
+    )
+    assert r"\href{https://github.com/johndoe}{\underline{github.com/johndoe}}" in latex
+    assert r"\href{https://linkedin.com/in/johndoe}{\underline{LinkedIn}}" not in latex
+    assert r"\href{https://github.com/johndoe}{\underline{GitHub}}" not in latex
+
+
+def test_build_resume_mono_template_adds_wrapping_guardrails():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        summary="Built CI/CD systems for long-running platform migrations.",
+        past_experience=[
+            CustomExperience(
+                company_name="Acme",
+                role="Engineer",
+                description=[
+                    "Merged oss-serverless/serverless fallback support across CI/CD workflows.",
+                ],
+            )
+        ],
+    )
+
+    latex = build_resume(info, template_id="mono")
+
+    assert r"\setlength{\emergencystretch}" in latex
+    assert r"\sloppy" in latex
+    assert r"CI/\allowbreak{}CD" in latex
+    assert r"oss-serverless/\allowbreak{}serverless" in latex
 
 
 def test_build_resume_with_experience():

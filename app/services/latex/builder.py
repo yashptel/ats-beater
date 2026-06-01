@@ -1,3 +1,5 @@
+import re
+
 from app.schemas.custom_resume import (
     CustomCertification,
     CustomEducation,
@@ -7,8 +9,15 @@ from app.schemas.custom_resume import (
     CustomProject,
     CustomResumeInfo,
 )
-from app.services.latex.sanitizer import convert_markdown_emphasis, strip_markdown_emphasis
+from app.services.latex.sanitizer import (
+    convert_markdown_emphasis,
+    handle_special_chars,
+    strip_markdown_emphasis,
+)
 from app.services.latex.templates import ResumeTemplate, get_resume_template
+
+
+_URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 
 def _fmt(text: str) -> str:
@@ -24,8 +33,27 @@ def _fmt(text: str) -> str:
         return strip_markdown_emphasis(text)
 
 
+def _add_break_opportunities(text: str) -> str:
+    return text.replace("/", r"/\allowbreak{}")
+
+
+def _fmt_body(text: str) -> str:
+    return _add_break_opportunities(_fmt(text))
+
+
+def _join_with_breaks(values: list[str]) -> str:
+    return ", ".join(_add_break_opportunities(value) for value in values)
+
+
 def _is_http_url(url: str | None) -> bool:
-    return bool(url and url.startswith(("http://", "https://")))
+    return bool(url and _URL_SCHEME_RE.match(url))
+
+
+def _display_url(url: str) -> str:
+    display = _URL_SCHEME_RE.sub("", url)
+    if display.lower().startswith("www."):
+        display = display[4:]
+    return display.rstrip("/") or display
 
 
 def _latex_link(url: str | None, label: str, *, underline: bool = True) -> str:
@@ -33,6 +61,12 @@ def _latex_link(url: str | None, label: str, *, underline: bool = True) -> str:
         return label
     rendered_label = rf"\underline{{{label}}}" if underline else label
     return rf"\href{{{url}}}{{{rendered_label}}}"
+
+
+def _latex_header_link(url: str | None, label: str) -> str:
+    if not _is_http_url(url):
+        return label
+    return _latex_link(url, handle_special_chars(_display_url(url)))
 
 
 def _date_range(start_date: str | None, end_date: str | None, *, fallback_present: bool = False) -> str:
@@ -155,6 +189,8 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \urlstyle{{same}}
 \raggedbottom
+\setlength{{\emergencystretch}}{{2em}}
+\sloppy
 \setlength{{\parindent}}{{0pt}}
 
 \titleformat{{\section}}[block]
@@ -210,7 +246,7 @@ def _add_header(
     if resume_info.date_of_birth:
         header_parts.append(resume_info.date_of_birth)
     for link in resume_info.links:
-        header_parts.append(_latex_link(link.url, link.name))
+        header_parts.append(_latex_header_link(link.url, link.name))
 
     if template.id in {"mono", "hybrid"}:
         primary_parts: list[str] = []
@@ -225,7 +261,7 @@ def _add_header(
         if resume_info.email:
             secondary_parts.append(rf"\underline{{{resume_info.email}}}")
         for link in resume_info.links:
-            secondary_parts.append(_latex_link(link.url, link.name))
+            secondary_parts.append(_latex_header_link(link.url, link.name))
 
         lines = [
             r"\begin{document}",
@@ -257,7 +293,7 @@ def _add_summary(
         return resume_latex
     lines = [
         _section(template, "Summary"),
-        rf"\small{{{_fmt(resume_info.summary)}}}",
+        rf"\small{{{_fmt_body(resume_info.summary)}}}",
         "",
     ]
     return resume_latex + "\n".join(lines)
@@ -269,14 +305,16 @@ def _add_skills(
     skills = resume_info.skills
     skill_rows: list[str] = []
     if skills.languages:
-        skill_rows.append(rf"\textbf{{Languages:}} {', '.join(skills.languages)}")
+        skill_rows.append(rf"\textbf{{Languages:}} {_join_with_breaks(skills.languages)}")
     if skills.frameworks:
-        skill_rows.append(rf"\textbf{{Frameworks:}} {', '.join(skills.frameworks)}")
+        skill_rows.append(
+            rf"\textbf{{Frameworks:}} {_join_with_breaks(skills.frameworks)}"
+        )
     if skills.databases:
-        skill_rows.append(rf"\textbf{{Databases:}} {', '.join(skills.databases)}")
+        skill_rows.append(rf"\textbf{{Databases:}} {_join_with_breaks(skills.databases)}")
     if skills.other_technologies:
         skill_rows.append(
-            rf"\textbf{{Other Technologies:}} {', '.join(skills.other_technologies)}"
+            rf"\textbf{{Other Technologies:}} {_join_with_breaks(skills.other_technologies)}"
         )
     if not skill_rows:
         return resume_latex
@@ -321,7 +359,7 @@ def _add_experience(
         lines.append(r"\resumeItemListStart")
         descriptions = exp.description or [""]
         for point in descriptions:
-            lines.append(rf"\resumeItem{{{_fmt(point)}}}")
+            lines.append(rf"\resumeItem{{{_fmt_body(point)}}}")
         lines.append(r"\resumeItemListEnd")
         lines.append("")
     lines.append(r"\resumeSubHeadingListEnd")
@@ -349,7 +387,7 @@ def _add_projects(
         lines.append(r"\resumeItemListStart")
         descriptions = project.description or [""]
         for point in descriptions:
-            lines.append(rf"\resumeItem{{{_fmt(point)}}}")
+            lines.append(rf"\resumeItem{{{_fmt_body(point)}}}")
         lines.append(r"\resumeItemListEnd")
         lines.append("")
     lines.append(r"\resumeSubHeadingListEnd")
@@ -392,14 +430,14 @@ def _add_string_list_section(
     margin = "0.15in" if template.id == "jake" else "0.24in"
     lines = [_section(template, title), rf"\begin{{itemize}}[leftmargin={margin}]"]
     for item in items:
-        lines.append(rf"\resumeItem{{{_fmt(item)}}}")
+        lines.append(rf"\resumeItem{{{_fmt_body(item)}}}")
     lines.append(r"\end{itemize}")
     lines.append("")
     return resume_latex + "\n".join(lines)
 
 
 def _certification_text(certification: CustomCertification) -> str:
-    text = _fmt(certification.name)
+    text = _fmt_body(certification.name)
     if not certification.credential_id:
         return text
     if _is_http_url(certification.credential_id):
@@ -415,11 +453,11 @@ def _add_certifications(
 
 
 def _patent_text(patent: CustomPatent) -> str:
-    text = _fmt(patent.name)
+    text = _fmt_body(patent.name)
     if patent.date:
         text += f" ({patent.date})"
     if patent.description:
-        text += f": {_fmt(patent.description)}"
+        text += f": {_fmt_body(patent.description)}"
     return text
 
 
@@ -431,11 +469,11 @@ def _add_patents(
 
 
 def _paper_text(paper: CustomPaper) -> str:
-    text = _fmt(paper.name)
+    text = _fmt_body(paper.name)
     if paper.date:
         text += f" ({paper.date})"
     if paper.description:
-        text += f": {_fmt(paper.description)}"
+        text += f": {_fmt_body(paper.description)}"
     return text
 
 
