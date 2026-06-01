@@ -197,8 +197,8 @@ def _start_document(template: ResumeTemplate) -> str:
   {{\centering\ttfamily\bfseries}}
   {{}}{{0pt}}
   {{}}
-  [\vspace{{2pt}}\noindent\rule{{\linewidth}}{{0.6pt}}]
-\titlespacing*{{\section}}{{0pt}}{{12pt}}{{8pt}}
+  [\vspace{{-2pt}}\noindent\rule{{\linewidth}}{{0.6pt}}]
+\titlespacing*{{\section}}{{0pt}}{{12pt}}{{6pt}}
 
 \pdfgentounicode=1
 

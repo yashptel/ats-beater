@@ -49,6 +49,19 @@ def test_build_resume_mono_template_uses_typewriter_style():
     assert r"{\LARGE\ttfamily\bfseries John Doe}" in latex
 
 
+def test_build_resume_mono_template_keeps_rule_tight_under_section_title():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        summary="Backend engineer.",
+    )
+
+    latex = build_resume(info, template_id="mono")
+
+    assert r"[\vspace{-2pt}\noindent\rule{\linewidth}{0.6pt}]" in latex
+    assert r"\titlespacing*{\section}{0pt}{12pt}{6pt}" in latex
+
+
 def test_build_resume_hybrid_template_keeps_proportional_body():
     info = CustomResumeInfo(
         name="John Doe",
