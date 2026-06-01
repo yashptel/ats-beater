@@ -36,7 +36,7 @@ def test_build_resume_mono_template_uses_typewriter_style():
         summary="Backend engineer.",
     )
     latex = build_resume(info, template_id="mono")
-    assert r"\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}" in latex
+    assert r"\usepackage{inconsolata}" in latex
     assert r"\renewcommand{\familydefault}{\ttdefault}" in latex
     assert r"\section{SUMMARY}" in latex
     assert r"\section{Summary}" not in latex
@@ -50,7 +50,7 @@ def test_build_resume_hybrid_template_keeps_proportional_body():
         summary="Backend engineer.",
     )
     latex = build_resume(info, template_id="hybrid")
-    assert r"\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}" in latex
+    assert r"\usepackage{inconsolata}" in latex
     assert r"\renewcommand{\familydefault}{\ttdefault}" not in latex
     assert r"\section{SUMMARY}" in latex
 

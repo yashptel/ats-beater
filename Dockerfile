@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-recommended \
     texlive-latex-extra \
     texlive-fonts-recommended \
+    texlive-fonts-extra \
     lmodern \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*

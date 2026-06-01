@@ -28,14 +28,14 @@ RESUME_TEMPLATES: tuple[ResumeTemplate, ...] = (
     ResumeTemplate(
         id="mono",
         name="Mono",
-        description="Typewriter-style resume using monospace typography throughout with roomier spacing.",
+        description="Typewriter-style resume using Inconsolata throughout with roomier spacing.",
         density_hint="Roomier layout. Prefer fewer, tighter bullets so the resume does not spill.",
         section_style="uppercase",
     ),
     ResumeTemplate(
         id="hybrid",
         name="Hybrid",
-        description="Monospace name and section headings with a proportional body for balance.",
+        description="Inconsolata name and section headings with a proportional body for balance.",
         density_hint="Balanced layout. Keep bullets concise and avoid overfilling sections.",
         section_style="uppercase",
     ),

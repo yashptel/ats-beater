@@ -69,7 +69,7 @@ stateDiagram-v2
 - **Docker** (for PostgreSQL)
 - **TeX Live** with `pdflatex`
   - macOS: `brew install --cask mactex`
-  - Ubuntu: `apt install texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended lmodern`
+  - Ubuntu: `apt install texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra lmodern`
 - **UV** package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
 ### Setup
