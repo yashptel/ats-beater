@@ -114,13 +114,13 @@ def _start_document(template: ResumeTemplate) -> str:
     font_setup = (
         r"""
 \usepackage[T1]{fontenc}
-\usepackage{inconsolata}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
 \renewcommand{\familydefault}{\ttdefault}
 """
         if template.id == "mono"
         else r"""
 \usepackage[T1]{fontenc}
-\usepackage{inconsolata}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
 """
     )
 
