@@ -23,3 +23,4 @@ async def test_create_job(db_session, test_user):
     assert job.id is not None
     assert job.status == JobStatus.PENDING
     assert job.job_description["company"] == "Acme"
+    assert job.template_id == "jake"

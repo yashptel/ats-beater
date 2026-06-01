@@ -61,6 +61,7 @@ class Paper(BaseModel):
 class ResumeInfo(BaseModel):
     name: str = Field(title="Name")
     mobile_number: Optional[str] = Field(default=None, title="Mobile number")
+    location: Optional[str] = Field(default=None, title="Candidate location")
     date_of_birth: Optional[str] = Field(
         default=None, description='Date of birth in the format "YYYY-MM-DD"'
     )

@@ -5,8 +5,10 @@ def test_custom_resume_info_minimal():
     info = CustomResumeInfo(
         name="John Doe",
         email="john@example.com",
+        location="Remote",
     )
     assert info.name == "John Doe"
+    assert info.location == "Remote"
     assert info.summary is None
     assert info.achievements == []
     assert info.skills.languages == []
@@ -20,6 +22,7 @@ def test_custom_resume_info_with_experience():
             CustomExperience(
                 company_name="BigCo",
                 role="SWE",
+                location="Bengaluru",
                 description=["Built microservices", "Led team of 5"],
             )
         ],
@@ -32,6 +35,7 @@ def test_custom_resume_info_with_experience():
     )
     assert len(info.past_experience) == 1
     assert len(info.past_experience[0].description) == 2
+    assert info.past_experience[0].location == "Bengaluru"
     assert "Python" in info.skills.languages
 
 

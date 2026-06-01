@@ -16,6 +16,9 @@ class User(TimestampMixin, Base):
     consent_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_super_admin: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    default_resume_template_id: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="jake", default="jake"
+    )
     tenant_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True
     )

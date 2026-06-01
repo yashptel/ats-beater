@@ -3,9 +3,10 @@ from app.schemas.resume import ResumeInfo, Link, Project, Experience, Skill, Edu
 
 
 def test_resume_info_minimal():
-    info = ResumeInfo(name="John Doe", email="john@example.com")
+    info = ResumeInfo(name="John Doe", email="john@example.com", location="Remote")
     assert info.name == "John Doe"
     assert info.email == "john@example.com"
+    assert info.location == "Remote"
     assert info.links == []
     assert info.projects == []
     assert info.past_experience == []

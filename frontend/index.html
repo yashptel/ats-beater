@@ -510,6 +510,18 @@
       width: 100%; height: 100%; border: none;
       border-radius: 8px; background: #1a1a2e;
     }
+    .template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .template-option {
+      text-align: left; padding: 12px; border-radius: 8px; cursor: pointer;
+      background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.05);
+      transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+    .template-option.active {
+      background: rgba(251,65,0,0.08); border-color: var(--orange);
+      box-shadow: 0 0 18px rgba(251,65,0,0.08);
+    }
+    .template-option:disabled { cursor: not-allowed; opacity: .65; }
+    @media (max-width: 768px) { .template-grid { grid-template-columns: 1fr; } }
 
     /* Mobile: chat as overlay drawer */
     @media (max-width: 768px) {

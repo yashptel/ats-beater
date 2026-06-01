@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Literal
 from datetime import datetime
 
+from app.services.latex.templates import ensure_valid_template_id
+
 
 class JobDescription(BaseModel):
     company: str = Field(..., title="Name of the company")
@@ -22,6 +24,14 @@ class JobDescription(BaseModel):
 class JobCreate(BaseModel):
     profile_id: int
     job_description: JobDescription
+    template_id: Optional[str] = None
+
+    @field_validator("template_id")
+    @classmethod
+    def template_id_allowed(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return ensure_valid_template_id(v)
 
 
 class JobResponse(BaseModel):
@@ -29,6 +39,7 @@ class JobResponse(BaseModel):
     user_id: str
     profile_id: int
     job_description: dict
+    template_id: str = "jake"
     custom_resume_data: Optional[dict] = None
     resume_latex_code: Optional[str] = None
     pdf_gcs_path: Optional[str] = None

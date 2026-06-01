@@ -7,6 +7,7 @@ STRUCTURED_RESUME_SYSTEM_PROMPT = """
 - Extract ALL links/profiles mentioned (GitHub, LinkedIn, Codeforces, LeetCode, Portfolio, personal website, etc.). Use the platform name as the `name` field. Construct the full URL if the username/handle is provided.
 - Remember: email is NOT a link.
 - Extract location (city, country, "Remote", etc.) and department/team name for each experience if mentioned.
+- Extract the candidate's own location (city, country, "Remote", etc.) into the top-level `location` field if it appears near their contact information.
 - Extract credential IDs for certifications if mentioned.
 - If the resume has a "Summary", "Profile", "About", or "Objective" section at the top, extract its text verbatim into the `summary` field. If no such section exists, leave `summary` as null. NEVER invent or generate a summary — extract only.
 - Not all fields will be present in every resume — leave those as null or empty list.
@@ -96,9 +97,16 @@ Here is the job they are applying for:
 {job_description}
 </job_description>
 
+Here is the resume template they selected:
+
+<resume_template>
+{resume_template}
+</resume_template>
+
 Generate a tailored, single-page resume optimized for this specific role. Prioritize relevance to the job description above all else.
 
 CRITICAL REMINDER: Every metric, number, skill, and technology in your output MUST come from the candidate's profile above. Do not fabricate any quantified results, percentages, or capabilities not explicitly stated.
+Use the selected template's density hint to choose how concise the content should be, but do not include visual styling details in the JSON.
 """
 
 ROAST_SYSTEM_PROMPT = """You are a brutally honest, hilarious resume roaster in the style of Reddit's r/RoastMe.

@@ -12,6 +12,7 @@ from app.dependencies import get_current_user
 from app.services.job.service import JobService
 from app.services.ai.user_settings import AISettingsService
 from app.schemas.job import JobCreate
+from app.schemas.templates import JobTemplateUpdateRequest
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -54,6 +55,7 @@ async def list_jobs(
                 "id": j.id,
                 "profile_id": j.profile_id,
                 "job_description": j.job_description,
+                "template_id": j.template_id,
                 "candidate_name": (j.custom_resume_data or {}).get("name"),
                 "status": j.status.value,
                 "created_at": j.created_at.isoformat(),
@@ -74,8 +76,14 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    job = await service.create_job(db, current_user.id, payload.profile_id, payload.job_description)
-    return {"job_id": job.id, "status": job.status.value}
+    job = await service.create_job(
+        db,
+        current_user.id,
+        payload.profile_id,
+        payload.job_description,
+        template_id=payload.template_id,
+    )
+    return {"job_id": job.id, "status": job.status.value, "template_id": job.template_id}
 
 
 @router.post("/{job_id}/generate-resume", status_code=202)
@@ -155,6 +163,7 @@ async def get_job(
         "id": job.id,
         "profile_id": job.profile_id,
         "job_description": job.job_description,
+        "template_id": job.template_id,
         "custom_resume_data": job.custom_resume_data,
         "status": job.status.value,
         "created_at": job.created_at.isoformat(),
@@ -170,6 +179,17 @@ async def get_job_status(
 ):
     job = await service.get_job(db, job_id, current_user.id)
     return {"id": job.id, "status": job.status.value}
+
+
+@router.post("/{job_id}/template")
+async def apply_template(
+    job_id: int,
+    payload: JobTemplateUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = await service.apply_template(db, job_id, current_user.id, payload.template_id)
+    return {"job_id": job.id, "status": job.status.value, "template_id": job.template_id}
 
 
 @router.get("/{job_id}/pdf")

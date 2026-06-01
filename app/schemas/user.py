@@ -14,6 +14,7 @@ class UserResponse(BaseModel):
     tenant_name: Optional[str] = None
     has_ai_settings: bool = False
     selected_model: Optional[str] = None
+    default_resume_template_id: str = "jake"
     created_at: datetime
 
     model_config = {"from_attributes": True}

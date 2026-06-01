@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.job import Job, JobStatus
 from app.models.profile import Profile, ProfileStatus
+from app.models.user import User
 from app.schemas.custom_resume import CustomResumeInfo
 from app.schemas.job import JobDescription
 from app.services.ai.inference import GeminiInference
@@ -13,6 +14,11 @@ from app.services.ai.prompts import CUSTOM_RESUME_SYSTEM_PROMPT, CUSTOM_RESUME_U
 from app.services.latex.builder import build_resume
 from app.services.latex.compiler import compile_latex
 from app.services.latex.sanitizer import sanitize_special_chars
+from app.services.latex.templates import (
+    ensure_valid_template_id,
+    get_resume_template,
+    normalize_template_id,
+)
 from app.services.storage.gcs import GCSClient
 from app.services.ai.user_settings import AISettingsService
 from app.exceptions import JobNotFoundError, ProfileNotFoundError
@@ -28,11 +34,14 @@ GCS_UPLOAD_RETRIES = 3
 GCS_UPLOAD_BACKOFF = 2.0  # seconds, exponential
 
 
-async def _background_gcs_upload(pdf_bytes: bytes, user_id: str, job_id: int) -> None:
+async def _background_gcs_upload(
+    pdf_bytes: bytes, user_id: str, job_id: int, template_id: str | None = None
+) -> None:
     """Upload PDF to GCS in background with retry. Updates job.pdf_gcs_path on success."""
     from app.database.session import async_session_factory
 
-    gcs_path = f"resumes/{user_id}/{job_id}.pdf"
+    resolved_template_id = normalize_template_id(template_id)
+    gcs_path = f"resumes/{user_id}/{job_id}_{resolved_template_id}.pdf"
     gcs = GCSClient()
 
     for attempt in range(GCS_UPLOAD_RETRIES):
@@ -44,9 +53,16 @@ async def _background_gcs_upload(pdf_bytes: bytes, user_id: str, job_id: int) ->
             async with async_session_factory() as db:
                 result = await db.execute(select(Job).where(Job.id == job_id))
                 job = result.scalar_one_or_none()
-                if job:
+                if job and normalize_template_id(job.template_id) == resolved_template_id:
                     job.pdf_gcs_path = gcs_path
                     await db.commit()
+                else:
+                    logger.info(
+                        "Skipping stale GCS path update for job %s template %s",
+                        job_id,
+                        resolved_template_id,
+                    )
+                    return
 
             # Clean up local temp file
             local_path = PDF_DIR / f"{user_id}_{job_id}.pdf"
@@ -72,6 +88,7 @@ class JobService:
         user_id: str,
         profile_id: int,
         job_description: JobDescription,
+        template_id: str | None = None,
     ) -> Job:
         # Validate profile exists and is ready
         result = await db.execute(
@@ -83,10 +100,19 @@ class JobService:
         if profile.status != ProfileStatus.READY:
             raise ValueError(f"Profile {profile_id} is not ready (status: {profile.status})")
 
+        if template_id is not None:
+            resolved_template_id = ensure_valid_template_id(template_id)
+        else:
+            user = await db.get(User, user_id)
+            resolved_template_id = normalize_template_id(
+                user.default_resume_template_id if user else None
+            )
+
         job = Job(
             user_id=user_id,
             profile_id=profile_id,
             job_description=job_description.model_dump(),
+            template_id=resolved_template_id,
             status=JobStatus.PENDING,
         )
         db.add(job)
@@ -108,9 +134,17 @@ class JobService:
             await db.commit()
             logger.info(f"[job:{job_id}] Phase 1 (resume tailoring) started")
 
+            template = get_resume_template(job.template_id)
             user_prompt = CUSTOM_RESUME_USER_PROMPT.format(
                 user_info=json.dumps(profile.resume_info or {}),
                 job_description=json.dumps(job.job_description or {}),
+                resume_template=json.dumps(
+                    {
+                        "id": template.id,
+                        "name": template.name,
+                        "density_hint": template.density_hint,
+                    }
+                ),
             )
 
             t0 = time.monotonic()
@@ -135,6 +169,7 @@ class JobService:
             result["name"] = resume_info.get("name", "")
             result["email"] = resume_info.get("email", "")
             result["mobile_number"] = resume_info.get("mobile_number")
+            result["location"] = resume_info.get("location")
             result["date_of_birth"] = resume_info.get("date_of_birth")
 
             t0 = time.monotonic()
@@ -185,7 +220,8 @@ class JobService:
             t0 = time.monotonic()
             sanitized = sanitize_special_chars(job.custom_resume_data)
             resume_info = CustomResumeInfo.model_validate(sanitized)
-            latex_code = build_resume(resume_info)
+            template_id = normalize_template_id(job.template_id)
+            latex_code = build_resume(resume_info, template_id=template_id)
             logger.info(f"[job:{job_id}] LaTeX build: {int((time.monotonic() - t0) * 1000)}ms ({len(latex_code)} chars)")
 
             # Compile PDF
@@ -201,6 +237,7 @@ class JobService:
 
             job.resume_latex_code = latex_code
             job.pdf_gcs_path = str(local_path)
+            job.template_id = template_id
             job.status = JobStatus.READY
             await db.commit()
 
@@ -208,7 +245,7 @@ class JobService:
             logger.info(f"[job:{job_id}] Phase 2 COMPLETE total={total_ms}ms")
 
             # Background GCS upload (with retry) — don't block the job status
-            asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id))
+            asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id, template_id))
 
         except Exception as e:
             total_ms = int((time.monotonic() - t_start) * 1000)
@@ -280,7 +317,9 @@ class JobService:
         for local_path in local_candidates:
             if await asyncio.to_thread(local_path.exists):
                 pdf_bytes = await asyncio.to_thread(local_path.read_bytes)
-                asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id))
+                asyncio.create_task(
+                    _background_gcs_upload(pdf_bytes, user_id, job_id, job.template_id)
+                )
                 return pdf_bytes
 
         # 3. Regenerate from stored LaTeX
@@ -288,7 +327,9 @@ class JobService:
             logger.info(f"Regenerating PDF from LaTeX for job {job_id}")
             pdf_bytes = await compile_latex(job.resume_latex_code)
             # Schedule background GCS upload
-            asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id))
+            asyncio.create_task(
+                _background_gcs_upload(pdf_bytes, user_id, job_id, job.template_id)
+            )
             return pdf_bytes
 
         raise ValueError("PDF not available — no GCS path, local file, or LaTeX code found")
@@ -300,6 +341,42 @@ class JobService:
         job.custom_resume_data = custom_resume_data
         await db.commit()
         await db.refresh(job)
+        return job
+
+    async def apply_template(
+        self, db: AsyncSession, job_id: int, user_id: str, template_id: str
+    ) -> Job:
+        """Switch a generated job to another fixed template and recompile.
+
+        The previous PDF and template_id are preserved if LaTeX compilation fails.
+        """
+        target_template_id = ensure_valid_template_id(template_id)
+        job = await self._get_job(db, job_id, user_id)
+        if not job.custom_resume_data:
+            raise ValueError("No custom resume data found. Generate the resume before applying a template.")
+
+        t_start = time.monotonic()
+        logger.info(f"[job:{job_id}] Template switch to {target_template_id} started")
+
+        sanitized = sanitize_special_chars(job.custom_resume_data)
+        resume_info = CustomResumeInfo.model_validate(sanitized)
+        latex_code = build_resume(resume_info, template_id=target_template_id)
+        pdf_bytes = await compile_latex(latex_code)
+
+        local_path = PDF_DIR / f"{user_id}_{job_id}.pdf"
+        await asyncio.to_thread(local_path.write_bytes, pdf_bytes)
+
+        job.template_id = target_template_id
+        job.resume_latex_code = latex_code
+        job.pdf_gcs_path = str(local_path)
+        job.status = JobStatus.READY
+        await db.commit()
+        await db.refresh(job)
+
+        total_ms = int((time.monotonic() - t_start) * 1000)
+        logger.info(f"[job:{job_id}] Template switch COMPLETE total={total_ms}ms")
+
+        asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id, target_template_id))
         return job
 
     async def _get_job(self, db: AsyncSession, job_id: int, user_id: str, *, for_update: bool = False) -> Job:

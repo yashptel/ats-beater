@@ -15,6 +15,8 @@ class CustomProject(BaseModel):
 
 class CustomExperience(BaseModel):
     company_name: str = Field(..., title="Name of the company")
+    department: Optional[str] = Field(default=None, title="Department or team name")
+    location: Optional[str] = Field(default=None, title="Location")
     start_date: Optional[str] = Field(default=None, title="Start date of the experience")
     end_date: Optional[str] = Field(default=None, title="End date of the experience")
     role: str = Field(..., title="Role in the company")
@@ -57,6 +59,7 @@ class CustomResumeInfo(BaseModel):
     name: str = Field(..., title="Name")
     email: str = Field(..., title="Email")
     mobile_number: Optional[str] = Field(default=None, title="Mobile number")
+    location: Optional[str] = Field(default=None, title="Candidate location")
     date_of_birth: Optional[str] = Field(default=None, title="Date of birth")
     summary: Optional[str] = Field(default=None, title="Optional professional summary")
     links: List[CustomLink] = Field(default=[], title="List of links")

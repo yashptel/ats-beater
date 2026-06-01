@@ -21,6 +21,9 @@ class Job(TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False, index=True)
     profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False, index=True)
     job_description: Mapped[dict] = mapped_column(JSON, nullable=False)
+    template_id: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="jake", default="jake"
+    )
     custom_resume_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     resume_latex_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_gcs_path: Mapped[str | None] = mapped_column(Text, nullable=True)

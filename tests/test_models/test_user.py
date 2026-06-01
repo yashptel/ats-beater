@@ -17,3 +17,4 @@ async def test_create_user(db_session):
     assert user.id is not None
     assert user.email == "newuser@example.com"
     assert user.consent_accepted is True
+    assert user.default_resume_template_id == "jake"

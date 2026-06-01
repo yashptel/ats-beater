@@ -9,8 +9,10 @@ from app.models.user import User
 from app.models.ai_settings import UserAISettings
 from app.models.tenant import Tenant, TenantDomainRule
 from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdateRequest
+from app.schemas.templates import UserPreferencesResponse, UserPreferencesUpdateRequest
 from app.services.auth import google_oauth
 from app.services.ai.user_settings import AISettingsService
+from app.services.latex.templates import normalize_template_id
 from typing import Optional
 from app.services.auth.jwt_handler import create_access_token, decode_expired_token
 from app.dependencies import get_current_user
@@ -146,6 +148,9 @@ async def get_me(
         "tenant_name": tenant_name,
         "has_ai_settings": ai_settings is not None,
         "selected_model": ai_settings.model_name if ai_settings else None,
+        "default_resume_template_id": normalize_template_id(
+            current_user.default_resume_template_id
+        ),
     }
 
 
@@ -180,3 +185,22 @@ async def delete_ai_settings(
 ):
     await ai_settings_service.delete_settings(db, current_user.id)
     return ai_settings_service.serialize(None)
+
+
+@router.put("/preferences", response_model=UserPreferencesResponse)
+async def update_preferences(
+    payload: UserPreferencesUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.get(User, current_user.id)
+    if not user:
+        raise AuthenticationError("User not found")
+    user.default_resume_template_id = payload.default_resume_template_id
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "default_resume_template_id": normalize_template_id(
+            user.default_resume_template_id
+        )
+    }

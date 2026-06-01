@@ -20,6 +20,7 @@ def test_custom_resume_user_prompt_carries_profile_summary():
     rendered = CUSTOM_RESUME_USER_PROMPT.format(
         user_info=json.dumps(user_info),
         job_description=json.dumps({"title": "Backend Engineer"}),
+        resume_template=json.dumps({"id": "jake", "density_hint": "Compact layout."}),
     )
     assert summary_text in rendered
     assert '"summary"' in rendered
@@ -30,6 +31,7 @@ def test_custom_resume_user_prompt_handles_null_summary():
     rendered = CUSTOM_RESUME_USER_PROMPT.format(
         user_info=json.dumps(user_info),
         job_description=json.dumps({}),
+        resume_template=json.dumps({"id": "jake", "density_hint": "Compact layout."}),
     )
     assert '"summary": null' in rendered
 
@@ -46,6 +48,21 @@ def test_structured_resume_prompt_extracts_summary_verbatim():
     text = STRUCTURED_RESUME_SYSTEM_PROMPT.lower()
     assert "summary" in text
     assert "verbatim" in text
+
+
+def test_structured_resume_prompt_extracts_candidate_location():
+    text = STRUCTURED_RESUME_SYSTEM_PROMPT.lower()
+    assert "top-level `location`" in text
+
+
+def test_custom_resume_prompt_includes_template_density_hint():
+    rendered = CUSTOM_RESUME_USER_PROMPT.format(
+        user_info=json.dumps({"name": "Test User", "email": "test@example.com"}),
+        job_description=json.dumps({"title": "Backend Engineer"}),
+        resume_template=json.dumps({"id": "mono", "density_hint": "Roomier layout."}),
+    )
+    assert "<resume_template>" in rendered
+    assert "Roomier layout." in rendered
 
 
 def test_enhanced_resume_prompt_preserves_null_summary():

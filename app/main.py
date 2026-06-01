@@ -260,10 +260,12 @@ body{{background:#0a0f1e;color:#e2e8f0;font-family:'Inter',sans-serif;min-height
     from app.api.roasts import router as roasts_router
     from app.api.chat import router as chat_router
     from app.api.profile_chat import router as profile_chat_router
+    from app.api.templates import router as templates_router
 
     app.include_router(auth_router)
     app.include_router(profiles_router)
     app.include_router(jobs_router)
+    app.include_router(templates_router)
     app.include_router(progress_router)
     app.include_router(admin_router)
     app.include_router(roasts_router)

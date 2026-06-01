@@ -16,6 +16,45 @@ def test_build_resume_minimal():
     assert r"\end{document}" in latex
 
 
+def test_build_resume_with_location_in_header():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        mobile_number="+1-555-0100",
+        location="Bengaluru, India",
+    )
+    latex = build_resume(info)
+    assert "Bengaluru, India" in latex
+    assert "+1-555-0100" in latex
+
+
+def test_build_resume_mono_template_uses_typewriter_style():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        location="Remote",
+        summary="Backend engineer.",
+    )
+    latex = build_resume(info, template_id="mono")
+    assert r"\usepackage{inconsolata}" in latex
+    assert r"\renewcommand{\familydefault}{\ttdefault}" in latex
+    assert r"\section{SUMMARY}" in latex
+    assert r"\section{Summary}" not in latex
+    assert r"{\LARGE\ttfamily\bfseries John Doe}" in latex
+
+
+def test_build_resume_hybrid_template_keeps_proportional_body():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        summary="Backend engineer.",
+    )
+    latex = build_resume(info, template_id="hybrid")
+    assert r"\usepackage{inconsolata}" in latex
+    assert r"\renewcommand{\familydefault}{\ttdefault}" not in latex
+    assert r"\section{SUMMARY}" in latex
+
+
 def test_build_resume_with_experience():
     info = CustomResumeInfo(
         name="Jane",

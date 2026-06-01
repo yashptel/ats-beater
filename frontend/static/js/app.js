@@ -176,6 +176,7 @@ async function downloadJobPdf(jobId, candidateName, role, company) {
 // Keep fetch promises outside reactive state to avoid Vue proxy issues
 let _profileFetchPromise = null;
 let _jobFetchPromise = null;
+let _templateFetchPromise = null;
 
 const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -188,6 +189,7 @@ const useAuthStore = defineStore('auth', {
     isSuperAdmin: (s) => !!(s.user && s.user.is_super_admin),
     tenantName: (s) => (s.user && s.user.tenant_name) || null,
     hasAISettings: (s) => !!(s.user && s.user.has_ai_settings),
+    defaultTemplateId: (s) => (s.user && s.user.default_resume_template_id) || 'jake',
     initials: (s) => {
       if (!s.user || !s.user.name) return '?';
       return s.user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -214,6 +216,10 @@ const useAuthStore = defineStore('auth', {
       if (!this.user) return;
       this.user.has_ai_settings = !!payload.has_ai_settings;
       this.user.selected_model = payload.selected_model || null;
+    },
+    setDefaultTemplate(templateId) {
+      if (!this.user) return;
+      this.user.default_resume_template_id = templateId || 'jake';
     },
   },
 });
@@ -377,10 +383,12 @@ const useJobStore = defineStore('job', {
       } catch (e) { this.error = e.message; }
       finally { this.loading = false; }
     },
-    async createJob(profileId, jobDescription) {
+    async createJob(profileId, jobDescription, templateId = null) {
       this.error = null;
       try {
-        return await api.post('/jobs/', { profile_id: profileId, job_description: jobDescription });
+        const payload = { profile_id: profileId, job_description: jobDescription };
+        if (templateId) payload.template_id = templateId;
+        return await api.post('/jobs/', payload);
       } catch (e) { this.error = e.message; throw e; }
     },
     async generateResume(jobId) {
@@ -391,6 +399,16 @@ const useJobStore = defineStore('job', {
     async generatePdf(jobId) {
       try {
         return await api.post(`/jobs/${jobId}/generate-pdf`);
+      } catch (e) { this.error = e.message; throw e; }
+    },
+    async applyTemplate(jobId, templateId) {
+      try {
+        const data = await api.post(`/jobs/${jobId}/template`, { template_id: templateId });
+        if (this.current && this.current.id === jobId) {
+          this.current.template_id = data.template_id;
+          this.current.status = data.status;
+        }
+        return data;
       } catch (e) { this.error = e.message; throw e; }
     },
     async pollStatus(id, interval = 2000, maxPolls = 90) {
@@ -560,6 +578,52 @@ const useAISettingsStore = defineStore('aiSettings', {
       } finally {
         this.saving = false;
       }
+    },
+  },
+});
+
+const useTemplateStore = defineStore('resumeTemplates', {
+  state: () => ({
+    items: [],
+    defaultTemplateId: 'jake',
+    loading: false,
+    saving: false,
+    error: null,
+  }),
+  getters: {
+    byId: (s) => Object.fromEntries(s.items.map(t => [t.id, t])),
+  },
+  actions: {
+    async fetchTemplates(force = false) {
+      if (_templateFetchPromise) return _templateFetchPromise;
+      if (!force && this.items.length > 0) return { items: this.items, default_template_id: this.defaultTemplateId };
+      this.loading = true;
+      this.error = null;
+      _templateFetchPromise = api.get('/resume-templates/')
+        .then(data => {
+          this.items = data.items || [];
+          this.defaultTemplateId = data.default_template_id || 'jake';
+          return data;
+        })
+        .catch(e => { this.error = e.message; throw e; })
+        .finally(() => { this.loading = false; _templateFetchPromise = null; });
+      return _templateFetchPromise;
+    },
+    async updateDefault(templateId) {
+      this.saving = true;
+      this.error = null;
+      try {
+        const data = await api.put('/auth/preferences', { default_resume_template_id: templateId });
+        return data;
+      } catch (e) {
+        this.error = e.message;
+        throw e;
+      } finally {
+        this.saving = false;
+      }
+    },
+    label(templateId) {
+      return this.byId[templateId]?.name || templateId || 'Jake';
     },
   },
 });
@@ -1574,6 +1638,7 @@ const ProfileDetailPage = {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div><label class="kpi-label block mb-1">Name</label><p class="text-white font-semibold">{{ info.name || '-' }}</p></div>
                 <div><label class="kpi-label block mb-1">Email</label><p class="text-white">{{ info.email || '-' }}</p></div>
+                <div><label class="kpi-label block mb-1">Location</label><p class="text-white">{{ info.location || '-' }}</p></div>
                 <div><label class="kpi-label block mb-1">Phone</label><p class="text-white">{{ info.mobile_number || '-' }}</p></div>
                 <div><label class="kpi-label block mb-1">Date of Birth</label><p class="text-white">{{ info.date_of_birth || '-' }}</p></div>
               </div>
@@ -1717,6 +1782,7 @@ const ProfileDetailPage = {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div><label class="kpi-label block mb-1">Name</label><input v-model="ed.name" class="input-field" /></div>
                 <div><label class="kpi-label block mb-1">Email</label><input v-model="ed.email" class="input-field" /></div>
+                <div><label class="kpi-label block mb-1">Location</label><input v-model="ed.location" class="input-field" placeholder="e.g. Remote or Bengaluru, India" /></div>
                 <div><label class="kpi-label block mb-1">Phone</label><input v-model="ed.mobile_number" class="input-field" placeholder="e.g. +91 9876543210" /></div>
                 <div><label class="kpi-label block mb-1">Date of Birth</label><input v-model="ed.date_of_birth" class="input-field" placeholder="YYYY-MM-DD" /></div>
               </div>
@@ -2060,6 +2126,7 @@ const ProfileDetailPage = {
       ed.value.certifications = ed.value.certifications || [];
       ed.value.patents = ed.value.patents || [];
       ed.value.papers = ed.value.papers || [];
+      ed.value.location = ed.value.location || null;
       ed.value.summary = ed.value.summary == null ? null : ed.value.summary;
       editing.value = true;
       editError.value = null;
@@ -2294,10 +2361,31 @@ const JobCreatePage = {
                 {{ jobDescription.length }} characters
               </p>
             </div>
+            <!-- Step 3: Template -->
+            <div class="widget-card mb-6 fade-slide-in stagger-3">
+              <div class="section-label">Step 3: Template</div>
+              <p class="text-xs mt-3 mb-4" style="color:var(--text-dim)">Your default template is preselected. Override it here for this specific job.</p>
+              <div v-if="templateStore.loading" class="flex items-center gap-2">
+                <div class="spinner"></div><span class="text-xs" style="color:var(--text-dim)">Loading templates...</span>
+              </div>
+              <div v-else class="template-grid">
+                <button v-for="tpl in templateStore.items" :key="'job-template-'+tpl.id"
+                        type="button"
+                        class="template-option"
+                        :class="{ active: selectedTemplateId === tpl.id }"
+                        @click="selectedTemplateId = tpl.id">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-sm font-bold text-white font-mono">{{ tpl.name }}</p>
+                    <span v-if="tpl.id === auth.defaultTemplateId" class="text-[9px] font-mono" style="color:var(--orange)">DEFAULT</span>
+                  </div>
+                  <p class="text-[11px] mt-1 leading-relaxed" style="color:var(--text-dim)">{{ tpl.description }}</p>
+                </button>
+              </div>
+            </div>
             <!-- Submit -->
             <div class="fade-slide-in stagger-3">
               <button class="btn-primary w-full justify-center" @click="submit"
-                      :disabled="!auth.hasAISettings || !selectedProfile || !company.trim() || !role.trim() || !jobDescription.trim() || submitting || profileStore.loading">
+                      :disabled="!auth.hasAISettings || !selectedProfile || !company.trim() || !role.trim() || !jobDescription.trim() || !selectedTemplateId || submitting || profileStore.loading || templateStore.loading">
                 <span v-if="submitting" class="spinner" style="width:16px;height:16px;border-width:2px;"></span>
                 {{ submitting ? 'CREATING...' : 'GENERATE RESUME' }}
               </button>
@@ -2398,7 +2486,9 @@ const JobCreatePage = {
     const router = useRouter();
     const profileStore = useProfileStore();
     const jobStore = useJobStore();
+    const templateStore = useTemplateStore();
     const selectedProfile = ref(null);
+    const selectedTemplateId = ref('jake');
     const company = ref('');
     const role = ref('');
     const jobDescription = ref('');
@@ -2425,8 +2515,12 @@ const JobCreatePage = {
     const readyProfiles = computed(() => profileStore.profiles.filter(p => p.status === 'READY'));
 
     onMounted(async () => {
-      await profileStore.fetchProfiles(true, { limit: 50 });
+      await Promise.all([
+        profileStore.fetchProfiles(true, { limit: 50 }),
+        templateStore.fetchTemplates(),
+      ]);
       if (profileStore.selectedId) selectedProfile.value = profileStore.selectedId;
+      selectedTemplateId.value = auth.defaultTemplateId || templateStore.defaultTemplateId || 'jake';
     });
 
     const startJdCycling = (companyName, roleName, description) => {
@@ -2471,7 +2565,7 @@ const JobCreatePage = {
       try {
         // Step 1: Create the job
         const jd = { company: company.value.trim(), role: role.value.trim(), description: jobDescription.value.trim() };
-        const result = await jobStore.createJob(selectedProfile.value, jd);
+        const result = await jobStore.createJob(selectedProfile.value, jd, selectedTemplateId.value);
         createdJobId.value = result.job_id;
 
         // Switch to processing view
@@ -2616,6 +2710,7 @@ const JobCreatePage = {
 
     const reset = () => {
       selectedProfile.value = null;
+      selectedTemplateId.value = auth.defaultTemplateId || templateStore.defaultTemplateId || 'jake';
       company.value = '';
       role.value = '';
       jobDescription.value = '';
@@ -2645,7 +2740,7 @@ const JobCreatePage = {
       return leave;
     });
 
-    return { auth, profileStore, selectedProfile, company, role, jobDescription, submitting, error, readyProfiles, formatDate, submit, processing, finalStatus, progress, statusLines, phaseLabel, jdLines, visibleJdLines, jdDone, retryGeneration, goToJob, reset };
+    return { auth, profileStore, templateStore, selectedProfile, selectedTemplateId, company, role, jobDescription, submitting, error, readyProfiles, formatDate, submit, processing, finalStatus, progress, statusLines, phaseLabel, jdLines, visibleJdLines, jdDone, retryGeneration, goToJob, reset };
   },
 };
 
@@ -2668,6 +2763,13 @@ const JobDetailPage = {
         </template>
         <template #right>
           <div class="flex items-center gap-3">
+            <select v-if="jobStore.current && jobStore.current.status === 'READY'" v-model="selectedTemplateId" class="input-field input-mono text-xs hidden md:block" style="width:128px;padding:8px 28px 8px 10px;">
+              <option v-for="tpl in templateStore.items" :key="'detail-template-'+tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+            </select>
+            <button v-if="jobStore.current && jobStore.current.status === 'READY'" @click="applySelectedTemplate" class="btn-secondary text-xs hidden md:inline-flex" :disabled="applyingTemplate || selectedTemplateId === jobStore.current.template_id">
+              <span v-if="applyingTemplate" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+              {{ applyingTemplate ? 'APPLYING...' : 'APPLY TEMPLATE' }}
+            </button>
             <button v-if="jobStore.current && jobStore.current.status === 'READY'" @click="doDownload" class="btn-primary text-xs" :disabled="downloading || jobStore.loading">
               <svg v-if="!downloading" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
               <span v-if="downloading" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
@@ -2681,6 +2783,14 @@ const JobDetailPage = {
       <!-- ====== READY STATE: Split layout with PDF + Chat ====== -->
       <div v-if="jobStore.current && jobStore.current.status === 'READY' && jobStore.customResume" class="split-layout">
         <div class="split-main" style="padding:0;position:relative;">
+          <div class="md:hidden" style="position:absolute;left:12px;right:12px;bottom:12px;z-index:7;display:flex;gap:8px;">
+            <select v-model="selectedTemplateId" class="input-field input-mono text-xs" style="padding:8px 28px 8px 10px;">
+              <option v-for="tpl in templateStore.items" :key="'mobile-detail-template-'+tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+            </select>
+            <button @click="applySelectedTemplate" class="btn-secondary text-xs whitespace-nowrap" :disabled="applyingTemplate || selectedTemplateId === jobStore.current.template_id">
+              {{ applyingTemplate ? '...' : 'APPLY' }}
+            </button>
+          </div>
           <div v-if="pdfLoading" class="flex items-center justify-center" style="height:100%;">
             <div class="text-center">
               <div class="spinner mx-auto mb-3" style="width:28px;height:28px;border-width:3px;"></div>
@@ -2695,6 +2805,9 @@ const JobDetailPage = {
             </div>
           </div>
           <iframe v-else-if="pdfUrl" :src="pdfUrl" class="pdf-embed"></iframe>
+          <div v-if="templateError" class="card-warning p-3" style="position:absolute;left:12px;right:12px;top:12px;z-index:6;">
+            <p class="text-xs font-mono text-white">{{ templateError }}</p>
+          </div>
           <div v-if="pdfRecompiling" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,27,46,0.7);border-radius:8px;z-index:5;">
             <div class="text-center">
               <div class="spinner mx-auto mb-2" style="width:24px;height:24px;border-width:2px;"></div>
@@ -2792,14 +2905,18 @@ const JobDetailPage = {
     const auth = useAuthStore();
     const router = useRouter();
     const jobStore = useJobStore();
+    const templateStore = useTemplateStore();
     const generating = ref(false);
     const downloading = ref(false);
+    const applyingTemplate = ref(false);
     const chatOpen = ref(false);
     const pdfUrl = ref(null);
     const pdfLoading = ref(false);
     const pdfError = ref(null);
+    const templateError = ref(null);
     const pdfRecompiling = ref(false);
     const isMobile = ref(window.innerWidth <= 768);
+    const selectedTemplateId = ref('jake');
     const jobId = computed(() => jobStore.selectedId);
 
     // -- Breadcrumb --
@@ -2873,6 +2990,29 @@ const JobDetailPage = {
       }
     };
 
+    const syncSelectedTemplate = () => {
+      selectedTemplateId.value = jobStore.current?.template_id || 'jake';
+    };
+
+    const applySelectedTemplate = async () => {
+      if (!jobStore.current || !selectedTemplateId.value || selectedTemplateId.value === jobStore.current.template_id) return;
+      applyingTemplate.value = true;
+      pdfRecompiling.value = true;
+      templateError.value = null;
+      try {
+        await jobStore.applyTemplate(jobId.value, selectedTemplateId.value);
+        await jobStore.fetchJob(jobId.value);
+        syncSelectedTemplate();
+        await loadPdf();
+      } catch (e) {
+        templateError.value = e.message || 'Template failed to compile. Your previous PDF was preserved.';
+        syncSelectedTemplate();
+      } finally {
+        applyingTemplate.value = false;
+        pdfRecompiling.value = false;
+      }
+    };
+
     // -- Chat modification handler --
     // Uses local pdfRecompiling state to avoid mutating store status,
     // which would unmount the split layout and destroy the chat panel.
@@ -2924,6 +3064,7 @@ const JobDetailPage = {
     const load = async () => {
       if (!jobId.value) { router.replace('/jobs'); return; }
       await jobStore.fetchJob(jobId.value);
+      syncSelectedTemplate();
       if (needsPolling.value) {
         startPolling();
       } else if (jobStore.current?.status === 'READY') {
@@ -2982,7 +3123,11 @@ const JobDetailPage = {
 
     let unmounted = false;
     const onResize = () => { isMobile.value = window.innerWidth <= 768; };
-    onMounted(() => { load(); window.addEventListener('resize', onResize); });
+    onMounted(() => {
+      templateStore.fetchTemplates();
+      load();
+      window.addEventListener('resize', onResize);
+    });
 
     // Cleanup blob URL + resize listener on unmount
     onUnmounted(() => {
@@ -2991,7 +3136,7 @@ const JobDetailPage = {
       if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value);
     });
 
-    return { auth, jobStore, jobId, generating, downloading, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, doGenerateResume, doGeneratePdf, smartRetry, doDownload };
+    return { auth, jobStore, templateStore, jobId, generating, downloading, applyingTemplate, selectedTemplateId, templateError, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, applySelectedTemplate, doGenerateResume, doGeneratePdf, smartRetry, doDownload };
   },
 };
 
@@ -4113,7 +4258,7 @@ const SettingsPage = {
         <template #left>
           <div>
             <h1 class="text-sm font-bold text-white font-mono tracking-tight">SETTINGS</h1>
-            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your Gemini API key and default model</p>
+            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your Gemini API key, default model, and resume template</p>
           </div>
         </template>
       </TopHeader>
@@ -4181,6 +4326,31 @@ const SettingsPage = {
           </div>
 
           <div class="widget-card p-6">
+            <div class="section-label mb-4">Resume Template</div>
+            <p class="text-xs mb-4" style="color:var(--text-dim)">This default is copied onto new jobs. Existing jobs keep their selected template unless you change it on the job page.</p>
+            <div v-if="templateStore.loading" class="flex items-center gap-2">
+              <div class="spinner"></div><span class="text-xs" style="color:var(--text-dim)">Loading templates...</span>
+            </div>
+            <div v-else class="template-grid">
+              <button v-for="tpl in templateStore.items" :key="'default-template-'+tpl.id"
+                      type="button"
+                      class="template-option"
+                      :class="{ active: defaultTemplateId === tpl.id }"
+                      @click="defaultTemplateId = tpl.id">
+                <p class="text-sm font-bold text-white font-mono">{{ tpl.name }}</p>
+                <p class="text-[11px] mt-1 leading-relaxed" style="color:var(--text-dim)">{{ tpl.description }}</p>
+              </button>
+            </div>
+            <p v-if="templateMessage" class="text-xs mt-4 font-mono" :style="{ color: templateMessageError ? 'var(--red)' : 'var(--green)' }">{{ templateMessage }}</p>
+            <div class="flex items-center justify-end gap-3 mt-5">
+              <button @click="saveDefaultTemplate" class="btn-primary text-xs" :disabled="templateStore.saving || !defaultTemplateId || defaultTemplateId === auth.defaultTemplateId">
+                <span v-if="templateStore.saving" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+                {{ templateStore.saving ? 'SAVING...' : 'SAVE TEMPLATE' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="widget-card p-6">
             <div class="section-label mb-4">Supported Models</div>
             <div class="space-y-2">
               <div v-for="model in aiStore.allowedModels" :key="'supported-'+model" class="rounded-lg px-4 py-3 font-mono text-xs text-white" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
@@ -4195,18 +4365,27 @@ const SettingsPage = {
   setup() {
     const auth = useAuthStore();
     const aiStore = useAISettingsStore();
+    const templateStore = useTemplateStore();
     const apiKey = ref('');
     const modelName = ref('');
+    const defaultTemplateId = ref('jake');
     const message = ref('');
     const messageError = ref(false);
+    const templateMessage = ref('');
+    const templateMessageError = ref(false);
 
     const syncForm = () => {
       modelName.value = aiStore.selectedModel || aiStore.allowedModels[0] || '';
+      defaultTemplateId.value = auth.defaultTemplateId || templateStore.defaultTemplateId || 'jake';
     };
 
     onMounted(async () => {
       try {
-        await aiStore.fetchSettings();
+        await Promise.all([
+          aiStore.fetchSettings(),
+          templateStore.fetchTemplates(),
+          auth.fetchMe(),
+        ]);
         syncForm();
       } catch (e) {
         message.value = e.message;
@@ -4263,7 +4442,21 @@ const SettingsPage = {
       }
     };
 
-    return { auth, aiStore, apiKey, modelName, message, messageError, saveDisabled, saveSettings, removeSettings, formatDate };
+    const saveDefaultTemplate = async () => {
+      templateMessage.value = '';
+      templateMessageError.value = false;
+      try {
+        const result = await templateStore.updateDefault(defaultTemplateId.value);
+        auth.setDefaultTemplate(result.default_resume_template_id);
+        defaultTemplateId.value = result.default_resume_template_id;
+        templateMessage.value = 'Default resume template saved.';
+      } catch (e) {
+        templateMessage.value = e.message;
+        templateMessageError.value = true;
+      }
+    };
+
+    return { auth, aiStore, templateStore, apiKey, modelName, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, formatDate };
   },
 };
 

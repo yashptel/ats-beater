@@ -8,6 +8,7 @@ from app.schemas.custom_resume import (
     CustomResumeInfo,
 )
 from app.services.latex.sanitizer import convert_markdown_emphasis, strip_markdown_emphasis
+from app.services.latex.templates import ResumeTemplate, get_resume_template
 
 
 def _fmt(text: str) -> str:
@@ -42,13 +43,15 @@ def _date_range(start_date: str | None, end_date: str | None, *, fallback_presen
     return start_date or end_date or ""
 
 
-def _start_document() -> str:
-    return r"""
+def _start_document(template: ResumeTemplate) -> str:
+    if template.id == "jake":
+        return r"""
 \documentclass[letterpaper,11pt]{article}
 
 \usepackage{latexsym}
 \usepackage[empty]{fullpage}
 \usepackage{titlesec}
+\usepackage[usenames,dvipsnames]{color}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 \usepackage{fancyhdr}
@@ -108,9 +111,98 @@ def _start_document() -> str:
 \newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-1pt}}
 """
 
+    font_setup = (
+        r"""
+\usepackage[T1]{fontenc}
+\usepackage{inconsolata}
+\renewcommand{\familydefault}{\ttdefault}
+"""
+        if template.id == "mono"
+        else r"""
+\usepackage[T1]{fontenc}
+\usepackage{inconsolata}
+"""
+    )
 
-def _add_header(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+    return rf"""
+\documentclass[letterpaper,11pt]{{article}}
+
+{font_setup}
+\usepackage{{latexsym}}
+\usepackage[empty]{{fullpage}}
+\usepackage{{titlesec}}
+\usepackage[usenames,dvipsnames]{{color}}
+\usepackage{{enumitem}}
+\usepackage[hidelinks]{{hyperref}}
+\usepackage{{fancyhdr}}
+\usepackage[english]{{babel}}
+\usepackage{{tabularx}}
+\usepackage{{needspace}}
+\input{{glyphtounicode}}
+
+\pagestyle{{fancy}}
+\fancyhf{{}}
+\fancyfoot{{}}
+\renewcommand{{\headrulewidth}}{{0pt}}
+\renewcommand{{\footrulewidth}}{{0pt}}
+\setlength{{\footskip}}{{6pt}}
+
+\addtolength{{\oddsidemargin}}{{-0.25in}}
+\addtolength{{\evensidemargin}}{{-0.25in}}
+\addtolength{{\textwidth}}{{0.5in}}
+\addtolength{{\topmargin}}{{-0.45in}}
+\addtolength{{\textheight}}{{0.85in}}
+
+\urlstyle{{same}}
+\raggedbottom
+\setlength{{\parindent}}{{0pt}}
+
+\titleformat{{\section}}[block]
+  {{\centering\ttfamily\bfseries}}
+  {{}}{{0pt}}
+  {{}}
+  [\vspace{{2pt}}\noindent\rule{{\linewidth}}{{0.6pt}}]
+\titlespacing*{{\section}}{{0pt}}{{12pt}}{{8pt}}
+
+\pdfgentounicode=1
+
+\newcommand{{\resumeItem}}[1]{{\item\small{{#1}}}}
+
+\newcommand{{\resumeSubheading}}[4]{{%
+  \Needspace{{4\baselineskip}}%
+  \vspace{{5pt}}\item[]%
+  \begin{{tabular*}}{{0.99\textwidth}}[t]{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
+    \if\relax\detokenize{{#4}}\relax #1\else #1, #4\fi & #2 \\
+  \end{{tabular*}}\\*[1pt]
+  \textbf{{\small #3}}\vspace{{-1pt}}
+}}
+
+\newcommand{{\resumeProjectHeading}}[2]{{%
+  \item[]%
+  \begin{{tabular*}}{{0.99\textwidth}}{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
+    \small #1 & \small #2 \\
+  \end{{tabular*}}\vspace{{-3pt}}
+}}
+
+\renewcommand\labelitemii{{$\vcenter{{\hbox{{\tiny$\bullet$}}}}$}}
+
+\newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in, label={{}}]}}
+\newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.24in,itemsep=5pt,topsep=6pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{2pt}}}}
+"""
+
+
+def _section(template: ResumeTemplate, title: str) -> str:
+    return rf"\section{{{title.upper() if template.uses_uppercase_sections else title}}}"
+
+
+def _add_header(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     header_parts: list[str] = []
+    if resume_info.location:
+        header_parts.append(resume_info.location)
     if resume_info.mobile_number:
         header_parts.append(resume_info.mobile_number)
     if resume_info.email:
@@ -119,6 +211,33 @@ def _add_header(resume_latex: str, resume_info: CustomResumeInfo) -> str:
         header_parts.append(resume_info.date_of_birth)
     for link in resume_info.links:
         header_parts.append(_latex_link(link.url, link.name))
+
+    if template.id in {"mono", "hybrid"}:
+        primary_parts: list[str] = []
+        if resume_info.location:
+            primary_parts.append(resume_info.location)
+        if resume_info.mobile_number:
+            primary_parts.append(resume_info.mobile_number)
+        if resume_info.date_of_birth:
+            primary_parts.append(resume_info.date_of_birth)
+
+        secondary_parts: list[str] = []
+        if resume_info.email:
+            secondary_parts.append(rf"\underline{{{resume_info.email}}}")
+        for link in resume_info.links:
+            secondary_parts.append(_latex_link(link.url, link.name))
+
+        lines = [
+            r"\begin{document}",
+            r"\begin{center}",
+            rf"    {{\LARGE\ttfamily\bfseries {resume_info.name}}}\\[4pt]",
+        ]
+        if primary_parts:
+            lines.append(r"    \small " + r" $\cdot$ ".join(primary_parts) + r"\\[3pt]")
+        if secondary_parts:
+            lines.append(r"    \small " + r" $\cdot$ ".join(secondary_parts))
+        lines.append(r"\end{center}")
+        return resume_latex + "\n".join(lines) + "\n"
 
     lines = [
         r"\begin{document}",
@@ -131,18 +250,22 @@ def _add_header(resume_latex: str, resume_info: CustomResumeInfo) -> str:
     return resume_latex + "\n".join(lines) + "\n"
 
 
-def _add_summary(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_summary(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     if not resume_info.summary:
         return resume_latex
     lines = [
-        r"\section{Summary}",
+        _section(template, "Summary"),
         rf"\small{{{_fmt(resume_info.summary)}}}",
         "",
     ]
     return resume_latex + "\n".join(lines)
 
 
-def _add_skills(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_skills(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     skills = resume_info.skills
     skill_rows: list[str] = []
     if skills.languages:
@@ -158,26 +281,42 @@ def _add_skills(resume_latex: str, resume_info: CustomResumeInfo) -> str:
     if not skill_rows:
         return resume_latex
 
-    lines = [
-        r"\section{Technical Skills}",
-        r"\begin{itemize}[leftmargin=0.15in, label={}]",
-        r"    \small{\item{",
-        "     " + r" \\ ".join(skill_rows),
-        r"    }}",
-        r"\end{itemize}",
-        "",
-    ]
+    if template.id == "jake":
+        lines = [
+            _section(template, "Technical Skills"),
+            r"\begin{itemize}[leftmargin=0.15in, label={}]",
+            r"    \small{\item{",
+            "     " + r" \\ ".join(skill_rows),
+            r"    }}",
+            r"\end{itemize}",
+            "",
+        ]
+    else:
+        lines = [
+            _section(template, "Technical Skills"),
+            r"\begin{itemize}[leftmargin=0in, label={}]",
+            r"    \small{\item[]{",
+            "     " + r" \\ ".join(skill_rows),
+            r"    }}",
+            r"\end{itemize}",
+            "",
+        ]
     return resume_latex + "\n".join(lines)
 
 
-def _add_experience(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_experience(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     if not resume_info.past_experience:
         return resume_latex
 
-    lines = [r"\section{Experience}", r"\resumeSubHeadingListStart"]
+    lines = [_section(template, "Experience"), r"\resumeSubHeadingListStart"]
     for exp in resume_info.past_experience:
+        role = exp.role
+        if exp.department:
+            role = f"{role}, {exp.department}"
         lines.append(
-            rf"\resumeSubheading{{{exp.company_name}}}{{{_date_range(exp.start_date, exp.end_date, fallback_present=True)}}}{{{exp.role}}}{{}}"
+            rf"\resumeSubheading{{{exp.company_name}}}{{{_date_range(exp.start_date, exp.end_date, fallback_present=True)}}}{{{role}}}{{{exp.location or ''}}}"
         )
         lines.append(r"\resumeItemListStart")
         descriptions = exp.description or [""]
@@ -197,11 +336,13 @@ def _project_heading(project: CustomProject) -> tuple[str, str]:
     return left, ""
 
 
-def _add_projects(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_projects(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     if not resume_info.projects:
         return resume_latex
 
-    lines = [r"\section{Projects}", r"\resumeSubHeadingListStart"]
+    lines = [_section(template, "Projects"), r"\resumeSubHeadingListStart"]
     for project in resume_info.projects:
         left, right = _project_heading(project)
         lines.append(rf"\resumeProjectHeading{{{left}}}{{{right}}}")
@@ -224,11 +365,13 @@ def _education_heading(education: CustomEducation) -> tuple[str, str, str, str]:
     return top_left, top_right, bottom_left, bottom_right
 
 
-def _add_education(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_education(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     if not resume_info.educations:
         return resume_latex
 
-    lines = [r"\section{Education}", r"\resumeSubHeadingListStart"]
+    lines = [_section(template, "Education"), r"\resumeSubHeadingListStart"]
     for education in resume_info.educations:
         top_left, top_right, bottom_left, bottom_right = _education_heading(education)
         lines.append(
@@ -240,11 +383,14 @@ def _add_education(resume_latex: str, resume_info: CustomResumeInfo) -> str:
     return resume_latex + "\n".join(lines)
 
 
-def _add_string_list_section(resume_latex: str, title: str, items: list[str]) -> str:
+def _add_string_list_section(
+    resume_latex: str, title: str, items: list[str], template: ResumeTemplate
+) -> str:
     if not items:
         return resume_latex
 
-    lines = [rf"\section{{{title}}}", r"\begin{itemize}[leftmargin=0.15in]"]
+    margin = "0.15in" if template.id == "jake" else "0.24in"
+    lines = [_section(template, title), rf"\begin{{itemize}}[leftmargin={margin}]"]
     for item in items:
         lines.append(rf"\resumeItem{{{_fmt(item)}}}")
     lines.append(r"\end{itemize}")
@@ -261,9 +407,11 @@ def _certification_text(certification: CustomCertification) -> str:
     return text + f" -- ID: {certification.credential_id}"
 
 
-def _add_certifications(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_certifications(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     items = [_certification_text(certification) for certification in resume_info.certifications]
-    return _add_string_list_section(resume_latex, "Certifications", items)
+    return _add_string_list_section(resume_latex, "Certifications", items, template)
 
 
 def _patent_text(patent: CustomPatent) -> str:
@@ -275,9 +423,11 @@ def _patent_text(patent: CustomPatent) -> str:
     return text
 
 
-def _add_patents(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_patents(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     items = [_patent_text(patent) for patent in resume_info.patents]
-    return _add_string_list_section(resume_latex, "Patents", items)
+    return _add_string_list_section(resume_latex, "Patents", items, template)
 
 
 def _paper_text(paper: CustomPaper) -> str:
@@ -289,27 +439,34 @@ def _paper_text(paper: CustomPaper) -> str:
     return text
 
 
-def _add_publications(resume_latex: str, resume_info: CustomResumeInfo) -> str:
+def _add_publications(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
     items = [_paper_text(paper) for paper in resume_info.papers]
-    return _add_string_list_section(resume_latex, "Publications", items)
+    return _add_string_list_section(resume_latex, "Publications", items, template)
 
 
-def _add_achievements(resume_latex: str, resume_info: CustomResumeInfo) -> str:
-    return _add_string_list_section(resume_latex, "Achievements", resume_info.achievements)
+def _add_achievements(
+    resume_latex: str, resume_info: CustomResumeInfo, template: ResumeTemplate
+) -> str:
+    return _add_string_list_section(
+        resume_latex, "Achievements", resume_info.achievements, template
+    )
 
 
-def build_resume(resume_info: CustomResumeInfo) -> str:
+def build_resume(resume_info: CustomResumeInfo, template_id: str | None = None) -> str:
     """Build a complete LaTeX resume from CustomResumeInfo. Data must already be sanitized."""
-    resume_latex = _start_document()
-    resume_latex = _add_header(resume_latex, resume_info)
-    resume_latex = _add_summary(resume_latex, resume_info)
-    resume_latex = _add_skills(resume_latex, resume_info)
-    resume_latex = _add_experience(resume_latex, resume_info)
-    resume_latex = _add_projects(resume_latex, resume_info)
-    resume_latex = _add_education(resume_latex, resume_info)
-    resume_latex = _add_achievements(resume_latex, resume_info)
-    resume_latex = _add_certifications(resume_latex, resume_info)
-    resume_latex = _add_patents(resume_latex, resume_info)
-    resume_latex = _add_publications(resume_latex, resume_info)
+    template = get_resume_template(template_id)
+    resume_latex = _start_document(template)
+    resume_latex = _add_header(resume_latex, resume_info, template)
+    resume_latex = _add_summary(resume_latex, resume_info, template)
+    resume_latex = _add_skills(resume_latex, resume_info, template)
+    resume_latex = _add_experience(resume_latex, resume_info, template)
+    resume_latex = _add_projects(resume_latex, resume_info, template)
+    resume_latex = _add_education(resume_latex, resume_info, template)
+    resume_latex = _add_achievements(resume_latex, resume_info, template)
+    resume_latex = _add_certifications(resume_latex, resume_info, template)
+    resume_latex = _add_patents(resume_latex, resume_info, template)
+    resume_latex = _add_publications(resume_latex, resume_info, template)
     resume_latex += r"\end{document}"
     return resume_latex
