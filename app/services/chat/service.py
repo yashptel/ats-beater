@@ -387,9 +387,9 @@ class ChatService:
         return {"status": "error", "message": "Unknown tool"}, resume_state, False
 
     def _make_openai_client(self, ai_settings):
-        from openai import AsyncOpenAI
+        from app.services.ai.openai_client import build_openai_compatible_client
 
-        return AsyncOpenAI(
+        return build_openai_compatible_client(
             api_key=ai_settings.api_key, base_url=ai_settings.base_url, timeout=60.0
         )
 

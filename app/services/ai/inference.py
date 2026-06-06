@@ -6,6 +6,7 @@ from typing import Type
 from pydantic import BaseModel, ValidationError
 from google import genai
 from google.genai import types
+from app.services.ai.openai_client import build_openai_compatible_client
 from app.services.ai.retry import retry_decor
 
 PRIMARY_TIMEOUT_SECONDS = 60
@@ -283,12 +284,10 @@ class OpenAICompatibleInference:
         reasoning_effort: str | None = None,
         timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
     ):
-        from openai import AsyncOpenAI
-
         self.model = model_name
         self.base_url = base_url
         self.reasoning_effort = reasoning_effort
-        self.client = AsyncOpenAI(
+        self.client = build_openai_compatible_client(
             api_key=api_key,
             base_url=base_url,
             timeout=float(timeout) if timeout else None,

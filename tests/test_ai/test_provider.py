@@ -5,6 +5,10 @@ import pytest
 from pydantic import BaseModel
 
 from app.services.ai.inference import GeminiInference, OpenAICompatibleInference
+from app.services.ai.openai_client import (
+    OPENAI_COMPATIBLE_USER_AGENT,
+    build_openai_compatible_client,
+)
 from app.services.ai.provider import build_inference
 from app.services.ai.user_settings import ResolvedAISettings
 
@@ -40,6 +44,13 @@ def _make_openai(reasoning_effort=None):
         base_url="https://proxy.example.com/v1",
         reasoning_effort=reasoning_effort,
     )
+
+
+def test_openai_compatible_client_uses_neutral_user_agent():
+    client = build_openai_compatible_client(
+        api_key="k", base_url="https://proxy.example.com/v1", timeout=20.0
+    )
+    assert client.default_headers["User-Agent"] == OPENAI_COMPATIBLE_USER_AGENT
 
 
 def _completion(content):

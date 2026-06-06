@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.exceptions import AISettingsRequiredError, InvalidAISettingsError
 from app.models.ai_settings import UserAISettings
+from app.services.ai.openai_client import build_openai_compatible_client
 
 PROVIDER_GEMINI = "gemini"
 PROVIDER_OPENAI = "openai_compatible"
@@ -177,9 +178,9 @@ class AISettingsService:
         return local_endpoints_allowed()
 
     def _openai_client(self, api_key: str, base_url: str):
-        from openai import AsyncOpenAI
-
-        return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=20.0)
+        return build_openai_compatible_client(
+            api_key=api_key, base_url=base_url, timeout=20.0
+        )
 
     async def validate_configuration(
         self,
