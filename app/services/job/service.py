@@ -9,7 +9,7 @@ from app.models.profile import Profile, ProfileStatus
 from app.models.user import User
 from app.schemas.custom_resume import CustomResumeInfo
 from app.schemas.job import JobDescription
-from app.services.ai.inference import GeminiInference
+from app.services.ai.provider import build_inference
 from app.services.ai.prompts import CUSTOM_RESUME_SYSTEM_PROMPT, CUSTOM_RESUME_USER_PROMPT
 from app.services.latex.builder import build_resume
 from app.services.latex.compiler import compile_latex
@@ -149,10 +149,7 @@ class JobService:
 
             t0 = time.monotonic()
             ai_settings = await self.ai_settings_service.resolve_for_user(db, user_id)
-            llm = GeminiInference(
-                api_key=ai_settings.api_key,
-                model_name=ai_settings.model_name,
-            )
+            llm = build_inference(ai_settings)
             result = await llm.run_inference(
                 system_prompt=CUSTOM_RESUME_SYSTEM_PROMPT,
                 inputs=[user_prompt],

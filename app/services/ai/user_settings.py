@@ -23,6 +23,12 @@ _BLOCKED_HOSTNAMES = {"localhost", "localhost.localdomain", "ip6-localhost"}
 _LOCAL_ENV_NAMES = {"DEV", "DEVELOPMENT", "LOCAL", "TEST"}
 
 
+def local_endpoints_allowed() -> bool:
+    """True when local/private OpenAI-compatible endpoints may be used (dev)."""
+    env = (get_settings().ENVIRONMENT or "").strip().upper()
+    return env in _LOCAL_ENV_NAMES
+
+
 def _ip_is_blocked(ip: "ipaddress._BaseAddress") -> bool:
     # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) so the embedded IPv4 is
     # range-checked — older Python versions don't flag these via is_private.
@@ -168,8 +174,7 @@ class AISettingsService:
         )
 
     def _allow_local_endpoints(self) -> bool:
-        env = (get_settings().ENVIRONMENT or "").strip().upper()
-        return env in _LOCAL_ENV_NAMES
+        return local_endpoints_allowed()
 
     def _openai_client(self, api_key: str, base_url: str):
         from openai import AsyncOpenAI

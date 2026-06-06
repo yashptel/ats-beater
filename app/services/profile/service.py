@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from app.models.profile import Profile, ProfileStatus
 from app.schemas.resume import ResumeInfo
 from app.services.ocr.extractor import PDFExtractor
-from app.services.ai.inference import GeminiInference
+from app.services.ai.provider import build_inference
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT, ENHANCED_RESUME_SYSTEM_PROMPT
 from app.services.ai.user_settings import AISettingsService
 from app.exceptions import ProfileNotFoundError
@@ -83,10 +83,7 @@ class ProfileService:
                 ai_settings = await self.ai_settings_service.resolve_for_user(
                     db, profile.user_id
                 )
-                llm = GeminiInference(
-                    api_key=ai_settings.api_key,
-                    model_name=ai_settings.model_name,
-                )
+                llm = build_inference(ai_settings)
                 result = await llm.run_inference(
                     system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
                     inputs=[text],
@@ -156,10 +153,7 @@ class ProfileService:
     async def enhance_profile(self, db: AsyncSession, profile_id: int, user_id: str) -> Profile:
         profile = await self.get_profile(db, profile_id, user_id)
         ai_settings = await self.ai_settings_service.resolve_for_user(db, user_id)
-        llm = GeminiInference(
-            api_key=ai_settings.api_key,
-            model_name=ai_settings.model_name,
-        )
+        llm = build_inference(ai_settings)
         result = await llm.run_inference(
             system_prompt=ENHANCED_RESUME_SYSTEM_PROMPT,
             inputs=[json.dumps(profile.resume_info or {})],
