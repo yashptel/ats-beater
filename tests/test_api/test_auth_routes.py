@@ -66,6 +66,28 @@ async def test_ai_settings_crud_flow(client):
 
 
 @pytest.mark.asyncio
+async def test_ai_settings_response_includes_provider(client):
+    resp = await client.get("/auth/ai-settings")
+    assert resp.status_code == 200
+    assert resp.json()["provider"] is None
+
+    with patch(
+        "app.api.auth.ai_settings_service.validate_configuration",
+        new=AsyncMock(return_value=None),
+    ):
+        save = await client.put(
+            "/auth/ai-settings",
+            json={"api_key": "test-api-key-9999", "model_name": "gemini-3-flash-preview"},
+        )
+    assert save.status_code == 200
+    assert save.json()["provider"] == "gemini"
+
+    me = await client.get("/auth/me")
+    assert me.status_code == 200
+    assert me.json()["provider"] == "gemini"
+
+
+@pytest.mark.asyncio
 async def test_ai_settings_rejects_unsupported_model(client):
     response = await client.put(
         "/auth/ai-settings",

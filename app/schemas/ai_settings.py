@@ -16,7 +16,10 @@ class AISettingsUpdateRequest(BaseModel):
 
 class AISettingsResponse(BaseModel):
     has_ai_settings: bool
+    provider: str | None = None
     selected_model: str | None = None
+    base_url: str | None = None
+    reasoning_effort: str | None = None
     masked_api_key: str | None = None
     api_key_last4: str | None = None
     validated_at: datetime | None = None

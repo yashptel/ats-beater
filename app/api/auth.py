@@ -147,6 +147,7 @@ async def get_me(
         "tenant_id": current_user.tenant_id,
         "tenant_name": tenant_name,
         "has_ai_settings": ai_settings is not None,
+        "provider": ai_settings.provider if ai_settings else None,
         "selected_model": ai_settings.model_name if ai_settings else None,
         "default_resume_template_id": normalize_template_id(
             current_user.default_resume_template_id

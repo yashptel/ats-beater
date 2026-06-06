@@ -9,6 +9,10 @@ from app.config import get_settings
 from app.exceptions import AISettingsRequiredError, InvalidAISettingsError
 from app.models.ai_settings import UserAISettings
 
+PROVIDER_GEMINI = "gemini"
+PROVIDER_OPENAI = "openai_compatible"
+SUPPORTED_PROVIDERS = (PROVIDER_GEMINI, PROVIDER_OPENAI)
+
 ALLOWED_GEMINI_MODELS = (
     "gemini-3-flash-preview",
     "gemini-3.1-pro-preview",
@@ -21,6 +25,9 @@ ALLOWED_GEMINI_MODELS = (
 class ResolvedAISettings:
     api_key: str
     model_name: str
+    provider: str = PROVIDER_GEMINI
+    base_url: str | None = None
+    reasoning_effort: str | None = None
     validated_at: datetime | None = None
 
 
@@ -67,10 +74,15 @@ class AISettingsService:
 
     async def resolve_for_user(self, db: AsyncSession, user_id: str) -> ResolvedAISettings:
         ai_settings = await self.require_settings(db, user_id)
-        self.ensure_allowed_model(ai_settings.model_name)
+        provider = ai_settings.provider or PROVIDER_GEMINI
+        if provider == PROVIDER_GEMINI:
+            self.ensure_allowed_model(ai_settings.model_name)
         return ResolvedAISettings(
             api_key=self.decrypt_api_key(ai_settings.encrypted_api_key),
             model_name=ai_settings.model_name,
+            provider=provider,
+            base_url=ai_settings.base_url,
+            reasoning_effort=ai_settings.reasoning_effort,
             validated_at=ai_settings.validated_at,
         )
 
@@ -142,7 +154,10 @@ class AISettingsService:
     def serialize(self, ai_settings: UserAISettings | None) -> dict:
         return {
             "has_ai_settings": ai_settings is not None,
+            "provider": (ai_settings.provider or PROVIDER_GEMINI) if ai_settings else None,
             "selected_model": ai_settings.model_name if ai_settings else None,
+            "base_url": ai_settings.base_url if ai_settings else None,
+            "reasoning_effort": ai_settings.reasoning_effort if ai_settings else None,
             "masked_api_key": self.mask_api_key(ai_settings.api_key_last4 if ai_settings else None),
             "api_key_last4": ai_settings.api_key_last4 if ai_settings else None,
             "validated_at": ai_settings.validated_at if ai_settings else None,
