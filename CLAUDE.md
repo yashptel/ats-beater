@@ -4,14 +4,14 @@
 
 **ATS Beater** — AI-powered resume tailoring service by [Yash Patel](https://linkedin.com/in/yashptel). Upload PDF resume → AI structures it → paste a job description → AI tailors a custom resume → LaTeX compiles to PDF.
 
-The app is free. Users bring their own Gemini API key (BYOK); generation runs against the key the user saves in Settings. There is no paywall, no payment integration, no credit ledger.
+The app is free. Users bring their own API key (BYOK) for one of two providers — **Gemini** or an **OpenAI-compatible** endpoint (custom proxy / Qwen-style); generation runs against the provider the user saves in Settings. There is no paywall, no payment integration, no credit ledger. The multi-provider design is captured in `docs/adr/0002-multi-provider-byok-abstraction.md`.
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
 | Backend | FastAPI, SQLAlchemy async, PostgreSQL 16 (Docker), Alembic |
-| AI | `google-genai` SDK, user-provided Gemini key (BYOK); env defaults for smoke tests only — **gemini-3-flash-preview** / **gemini-3.1-pro-preview** |
+| AI | `google-genai` SDK (Gemini) + `openai` SDK (OpenAI-compatible Chat Completions); user-provided key per provider (BYOK). Env defaults for smoke tests only — **gemini-3-flash-preview** / **gemini-3.1-pro-preview** |
 | PDF | pdflatex + `resume.cls`, pdfplumber for text extraction |
 | Frontend | Vue 3 + Tailwind + Pinia — all via CDN, no build step, hash router |
 | Auth | Google OAuth 2.0 → JWT |
@@ -40,11 +40,11 @@ INTEGRATION=1 uv run pytest tests/integration/ -v   # smoke tests (needs real DB
 ## Data Flow
 
 ```
-Upload PDF ──→ pdfplumber extract ──→ Gemini Flash structures ──→ ResumeInfo (JSON in PostgreSQL)
+Upload PDF ──→ pdfplumber extract ──→ active provider structures ──→ ResumeInfo (JSON in PostgreSQL)
                                                                          │
 Job Description ────────────────────────────────────────────────────────→ │
                                                                          ▼
-                                                              Gemini Pro tailors
+                                                         active provider tailors
                                                                          │
                                                                          ▼
                                                               CustomResumeInfo
@@ -55,7 +55,7 @@ Job Description ─────────────────────�
 
 Phase 1 and Phase 2 are separate API calls. User can review/edit `CustomResumeInfo` between phases.
 
-All Gemini calls go through the per-user `UserAISettings` row (encrypted API key + model name), resolved via `AISettingsService.resolve_for_user`. No request runs without a saved key.
+All AI calls go through the per-user `UserAISettings` row (`provider` + encrypted API key + model name, plus `base_url`/`reasoning_effort` for OpenAI-compatible), resolved via `AISettingsService.resolve_for_user`, then dispatched to the right inference client via `build_inference` (`app/services/ai/provider.py`). No request runs without saved settings.
 
 ## Job Status Flow
 
@@ -75,19 +75,21 @@ app/
     __init__.py            # MUST import all models (relationship resolution)
   database/session.py      # async engine, sessionmaker, get_db() generator
   services/
-    ai/inference.py        # GeminiInference — structured output + retry
+    ai/inference.py        # GeminiInference + OpenAICompatibleInference — structured output + retry
+    ai/provider.py         # build_inference(resolved) — picks the impl for the active provider
     ai/prompts.py          # System/user prompt templates
     ai/retry.py            # retry_decor with exponential backoff
-    ai/user_settings.py    # AISettingsService — encrypted BYOK key + model allow-list
-    ocr/extractor.py       # PDFExtractor — pdfplumber first, Gemini vision fallback
+    ai/user_settings.py    # AISettingsService — provider-aware BYOK (encrypt, validate, /models, SSRF guard)
+    ocr/extractor.py       # PDFExtractor — pdfplumber first, provider vision fallback
     latex/builder.py       # CustomResumeInfo → LaTeX string
     latex/compiler.py      # LaTeX string → PDF bytes (60s timeout)
     latex/sanitizer.py     # Escape LaTeX special chars
     profile/service.py     # ProfileService — create, process (background), enhance, CRUD
     job/service.py         # JobService — generate_custom_resume (Phase 1), generate_pdf (Phase 2)
     roast/service.py       # RoastService — free resume roast/critique flow
-    chat/service.py        # Job chat — interview answers, referral drafts
-    chat/profile_chat.py   # Profile-scoped resume coaching chat
+    chat/service.py        # Job chat — interview answers, referral drafts (dispatches by provider)
+    chat/profile_chat.py   # Profile-scoped resume coaching chat (dispatches by provider)
+    chat/openai_chat.py    # Shared OpenAI-compatible Chat Completions tool-call loop
     auth/google_oauth.py   # OAuth URL, code exchange, user info
     auth/jwt_handler.py    # create_access_token, verify_token
   api/
@@ -127,9 +129,10 @@ resume.cls                 # LaTeX document class — copied into temp dir at co
 | GET | `/auth/google/login` | Returns OAuth URL |
 | GET | `/auth/google/callback` | Exchanges code, redirects with JWT |
 | GET | `/auth/me` | Current user info (incl. AI-settings status) |
-| GET | `/auth/ai-settings` | Get saved Gemini key status + allowed models |
-| PUT | `/auth/ai-settings` | Upsert Gemini key/model (validated against Gemini before save) |
-| DELETE | `/auth/ai-settings` | Remove saved Gemini key |
+| GET | `/auth/ai-settings` | Get saved provider config status + Gemini allow-list |
+| PUT | `/auth/ai-settings` | Upsert provider/key/model (+ base_url/reasoning_effort); validated against the provider before save |
+| DELETE | `/auth/ai-settings` | Remove saved provider config |
+| POST | `/auth/ai-settings/models` | Discover models from an OpenAI-compatible `/models` endpoint (graceful fallback to manual entry) |
 | POST | `/profiles/upload` | Upload PDF (202, processes in background) |
 | GET | `/profiles/` | List user's profiles |
 | GET | `/profiles/{id}` | Get profile with resume_info |
@@ -156,6 +159,10 @@ resume.cls                 # LaTeX document class — copied into temp dir at co
 - Services call `await db.rollback()` before setting FAILED status in exception handlers
 - OAuth callback redirects to `/#/login?access_token=` (hash routing)
 - AI calls always resolve through `AISettingsService.resolve_for_user` — no fallback to env keys at request time
+- Feature services stay provider-agnostic: they call `build_inference(resolved)` (or the chat tool loop), never a provider SDK directly. Adding a provider = new `*Inference` impl + a branch in `build_inference`
+- Pydantic parse/validate/retry stays the structured-output authority for both providers (`parse_structured_output`); `response_format=json_object` is only a hint
+- User-supplied OpenAI-compatible base URLs are SSRF-guarded (`validate_base_url`) at save **and** request time — prod blocks non-HTTPS/localhost/private/loopback/link-local; dev (`ENVIRONMENT` in DEV/DEVELOPMENT/LOCAL/TEST) allows local HTTP
+- `LLMRequest.provider` is logged on every call; admin analytics group by provider+model
 - All `.env` config documented in `.env.example`
 - All admin GET endpoints use pagination envelope: `{items, total, page, pages, limit}`
 
@@ -175,7 +182,7 @@ See `infra/deploy-cloudrun.sh` for Cloud Run deployment. Configure your own:
 - GCS bucket for PDF storage
 - Google OAuth credentials
 
-End users supply their own Gemini API key via the Settings page; no server-side Gemini key is needed in production.
+End users supply their own provider API key (Gemini or OpenAI-compatible) via the Settings page; no server-side AI key is needed in production. Set `ENVIRONMENT=PROD` (or any non-dev value) in production so the SSRF guard enforces HTTPS-only public endpoints for OpenAI-compatible base URLs.
 
 Environment variables are documented in `.env.example`.
 
