@@ -4364,36 +4364,18 @@ const SettingsPage = {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="kpi-label block mb-1">Model</label>
-                  <div class="flex gap-2">
-                    <div class="model-suggest-wrap">
-                      <input v-model="modelName"
-                             type="text"
-                             class="input-field input-mono"
-                             placeholder="e.g. qwen2.5-72b-instruct"
-                             autocomplete="off"
-                             @focus="modelMenuOpen = aiStore.discoveredModels.length > 0"
-                             @blur="closeModelMenuSoon"
-                             @keydown.escape="modelMenuOpen = false" />
-                      <div v-if="modelMenuOpen && aiStore.discoveredModels.length" class="model-suggest-menu">
-                        <button v-for="m in filteredDiscoveredModels"
-                                :key="'disc-'+m"
-                                type="button"
-                                class="model-suggest-option"
-                                :class="{ active: m === modelName }"
-                                @mousedown.prevent="selectDiscoveredModel(m)"
-                                :title="m">
-                          {{ m }}
-                        </button>
-                        <div v-if="filteredDiscoveredModels.length === 0" class="model-suggest-empty">
-                          No discovered models match. Type your own model ID.
-                        </div>
-                      </div>
-                    </div>
+                  <div class="flex gap-2 mb-2">
+                    <input v-model="modelName" type="text" class="input-field input-mono" style="flex:1;" placeholder="e.g. qwen2.5-72b-instruct" />
                     <button type="button" @click="discoverModels" class="btn-ghost text-xs whitespace-nowrap" :disabled="aiStore.discovering || !baseUrl.trim()">
                       <span v-if="aiStore.discovering" class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
                       {{ aiStore.discovering ? '...' : 'DISCOVER' }}
                     </button>
                   </div>
+                  <select v-if="aiStore.discoveredModels.length" v-model="modelName" class="input-field input-mono">
+                    <option value="" disabled>Select a discovered model...</option>
+                    <option v-if="modelName && !aiStore.discoveredModels.includes(modelName)" :value="modelName">Custom: {{ modelName }}</option>
+                    <option v-for="m in aiStore.discoveredModels" :key="'disc-'+m" :value="m">{{ m }}</option>
+                  </select>
                   <p class="text-[10px] font-mono mt-2" :style="{ color: aiStore.discoverError ? 'var(--orange)' : 'var(--text-dim)' }">
                     {{ aiStore.discoverError ? aiStore.discoverError : (aiStore.discoveredModels.length ? ('Discovered ' + aiStore.discoveredModels.length + ' model(s) — pick one or type your own.') : 'Enter a model ID, or click DISCOVER to fetch from the endpoint.') }}
                   </p>
@@ -4474,7 +4456,6 @@ const SettingsPage = {
     const provider = ref('gemini');
     const baseUrl = ref('');
     const reasoningEffort = ref('');
-    const modelMenuOpen = ref(false);
     const defaultTemplateId = ref('jake');
     const message = ref('');
     const messageError = ref(false);
@@ -4491,11 +4472,6 @@ const SettingsPage = {
     const keyHint = computed(() => keyRequired.value
       ? 'Your key is encrypted at rest before it is stored.'
       : 'Leave blank if you only want to change other fields.');
-    const filteredDiscoveredModels = computed(() => {
-      const query = modelName.value.trim().toLowerCase();
-      if (!query) return aiStore.discoveredModels;
-      return aiStore.discoveredModels.filter(m => m.toLowerCase().includes(query));
-    });
 
     const syncForm = () => {
       provider.value = aiStore.provider || 'gemini';
@@ -4581,20 +4557,10 @@ const SettingsPage = {
     const discoverModels = async () => {
       if (!baseUrl.value.trim()) return;
       try {
-        const data = await aiStore.discoverModels(baseUrl.value.trim(), apiKey.value.trim());
-        modelMenuOpen.value = !!(data.models && data.models.length);
+        await aiStore.discoverModels(baseUrl.value.trim(), apiKey.value.trim());
       } catch (e) {
         // store already captured discoverError for inline display
       }
-    };
-
-    const selectDiscoveredModel = (model) => {
-      modelName.value = model;
-      modelMenuOpen.value = false;
-    };
-
-    const closeModelMenuSoon = () => {
-      setTimeout(() => { modelMenuOpen.value = false; }, 120);
     };
 
     const saveDefaultTemplate = async () => {
@@ -4611,7 +4577,7 @@ const SettingsPage = {
       }
     };
 
-    return { auth, aiStore, templateStore, apiKey, modelName, provider, baseUrl, reasoningEffort, modelMenuOpen, filteredDiscoveredModels, providerLabel, keyPlaceholder, keyHint, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, discoverModels, selectDiscoveredModel, closeModelMenuSoon, formatDate };
+    return { auth, aiStore, templateStore, apiKey, modelName, provider, baseUrl, reasoningEffort, providerLabel, keyPlaceholder, keyHint, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, discoverModels, formatDate };
   },
 };
 
