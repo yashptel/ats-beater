@@ -132,3 +132,36 @@ def test_roast_result_with_ats_data():
     assert result.ats_checklist[0].passed is True
     assert result.ocr_verification is not None
     assert result.ocr_verification.text_matches_visual is True
+
+
+def test_roast_result_accepts_common_openai_compatible_near_miss_shape():
+    data = {
+        "roast": [
+            "This resume is trying to be a novel and a spreadsheet at the same time.",
+            {"text": "The skills section reads like keyword soup."},
+        ],
+        "feedback": "Trim the layout, make bullets measurable, and tighten the hierarchy.",
+        "score": 4,
+        "verdict": "Guilty of making recruiters hunt for signal.",
+        "ats_checklist": [
+            {
+                "label": "Machine Readability",
+                "passed": True,
+                "detail": "The text is extractable.",
+                "category": "parsing",
+            },
+        ],
+        "ocr_verification": None,
+    }
+
+    result = RoastResult(**data)
+
+    assert result.headline == "Guilty of making recruiters hunt for signal."
+    assert [point.text for point in result.roast_points] == [
+        "This resume is trying to be a novel and a spreadsheet at the same time.",
+        "The skills section reads like keyword soup.",
+    ]
+    assert [point.emoji for point in result.roast_points] == ["🔥", "🔥"]
+    assert result.actual_feedback == (
+        "Trim the layout, make bullets measurable, and tighten the hierarchy."
+    )

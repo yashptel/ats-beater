@@ -1,9 +1,20 @@
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class RoastPoint(BaseModel):
     emoji: str = Field(..., description="A single emoji that fits the roast point")
     text: str = Field(..., description="The roast point text, witty and sharp")
+
+    @model_validator(mode="before")
+    @classmethod
+    def tolerate_text_only_point(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"emoji": "🔥", "text": data}
+        if isinstance(data, dict) and "emoji" not in data and "text" in data:
+            return {**data, "emoji": "🔥"}
+        return data
 
 
 class ATSCheckItem(BaseModel):
@@ -27,6 +38,32 @@ class RoastResult(BaseModel):
     verdict: str = Field(..., description="A short final verdict, like a judge's ruling")
     ats_checklist: list[ATSCheckItem] = Field(default_factory=list, description="8-12 ATS readiness checks")
     ocr_verification: OCRVerification | None = Field(default=None, description="OCR vs visual comparison result")
+
+    @model_validator(mode="before")
+    @classmethod
+    def tolerate_provider_near_misses(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        values = {**data}
+        if "roast_points" not in values and "roast" in values:
+            values["roast_points"] = values["roast"]
+        if "actual_feedback" not in values:
+            for key in ("feedback", "constructive_feedback", "actualFeedback", "advice"):
+                if key in values:
+                    values["actual_feedback"] = values[key]
+                    break
+        if "headline" not in values:
+            values["headline"] = values.get("verdict") or "Resume Roast"
+
+        return values
+
+    @field_validator("actual_feedback", mode="before")
+    @classmethod
+    def coerce_feedback(cls, value: Any) -> Any:
+        if isinstance(value, list):
+            return " ".join(str(item).strip() for item in value if str(item).strip())
+        return value
 
 
 class RoastUploadResponse(BaseModel):
