@@ -173,8 +173,11 @@ async def upsert_ai_settings(
     ai_settings = await ai_settings_service.upsert_settings(
         db,
         current_user.id,
+        provider=payload.provider,
         api_key=payload.api_key.strip() if payload.api_key else None,
         model_name=payload.model_name,
+        base_url=payload.base_url.strip() if payload.base_url else None,
+        reasoning_effort=payload.reasoning_effort,
     )
     return ai_settings_service.serialize(ai_settings)
 

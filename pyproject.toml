@@ -14,6 +14,7 @@ dependencies = [
     "alembic>=1.13.0",
     # AI
     "google-genai>=1.2.0",
+    "openai>=1.40.0",
     # PDF processing
     "pdfplumber>=0.11.0",
     "pdf2image>=1.17.0",

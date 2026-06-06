@@ -88,6 +88,34 @@ async def test_ai_settings_response_includes_provider(client):
 
 
 @pytest.mark.asyncio
+async def test_save_openai_compatible_settings(client):
+    with patch(
+        "app.api.auth.ai_settings_service.validate_configuration",
+        new=AsyncMock(return_value=None),
+    ):
+        resp = await client.put(
+            "/auth/ai-settings",
+            json={
+                "provider": "openai_compatible",
+                "api_key": "sk-proxy-9999",
+                "model_name": "qwen2.5-72b-instruct",
+                "base_url": "https://proxy.example.com/v1",
+                "reasoning_effort": "medium",
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] == "openai_compatible"
+    assert data["base_url"] == "https://proxy.example.com/v1"
+    assert data["selected_model"] == "qwen2.5-72b-instruct"
+    assert data["reasoning_effort"] == "medium"
+    assert data["api_key_last4"] == "9999"
+
+    me = await client.get("/auth/me")
+    assert me.json()["provider"] == "openai_compatible"
+
+
+@pytest.mark.asyncio
 async def test_ai_settings_rejects_unsupported_model(client):
     response = await client.put(
         "/auth/ai-settings",

@@ -1,5 +1,8 @@
+import ipaddress
+import socket
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet, MultiFernet
 from google import genai
@@ -12,6 +15,84 @@ from app.models.ai_settings import UserAISettings
 PROVIDER_GEMINI = "gemini"
 PROVIDER_OPENAI = "openai_compatible"
 SUPPORTED_PROVIDERS = (PROVIDER_GEMINI, PROVIDER_OPENAI)
+
+# Hostnames that always resolve to a loopback/local target.
+_BLOCKED_HOSTNAMES = {"localhost", "localhost.localdomain", "ip6-localhost"}
+
+# Environments where local/private endpoints are allowed (proxy testing).
+_LOCAL_ENV_NAMES = {"DEV", "DEVELOPMENT", "LOCAL", "TEST"}
+
+
+def _ip_is_blocked(ip: "ipaddress._BaseAddress") -> bool:
+    # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) so the embedded IPv4 is
+    # range-checked — older Python versions don't flag these via is_private.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return _ip_is_blocked(mapped)
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def validate_base_url(url: str, *, allow_local: bool, resolver=socket.getaddrinfo) -> None:
+    """SSRF guard for user-supplied OpenAI-compatible base URLs.
+
+    In production (``allow_local=False``) only public HTTPS endpoints are
+    permitted: localhost, loopback, private, link-local, and other reserved
+    targets are rejected — including hostnames that resolve to those ranges.
+    In development (``allow_local=True``) local HTTP endpoints are allowed so
+    proxies can be tested.
+    """
+    if not url or not url.strip():
+        raise InvalidAISettingsError("Base URL is required for OpenAI-compatible providers.")
+
+    parsed = urlparse(url.strip())
+    scheme = (parsed.scheme or "").lower()
+    host = parsed.hostname
+
+    if not host:
+        raise InvalidAISettingsError("Enter a valid base URL, e.g. https://host/v1.")
+
+    if allow_local:
+        if scheme not in ("http", "https"):
+            raise InvalidAISettingsError("Base URL must use http or https.")
+        return
+
+    if scheme != "https":
+        raise InvalidAISettingsError("Base URL must use HTTPS.")
+
+    if host.lower() in _BLOCKED_HOSTNAMES:
+        raise InvalidAISettingsError("Base URL host is not allowed.")
+
+    candidates: list = []
+    try:
+        candidates.append(ipaddress.ip_address(host))
+    except ValueError:
+        # Hostname — resolve every address it maps to and check them all.
+        try:
+            infos = resolver(host, None)
+        except Exception as exc:
+            raise InvalidAISettingsError("Could not resolve the base URL host.") from exc
+        for info in infos:
+            ip_str = info[4][0]
+            try:
+                candidates.append(ipaddress.ip_address(ip_str))
+            except ValueError:
+                continue
+
+    if not candidates:
+        raise InvalidAISettingsError("Could not resolve the base URL host.")
+
+    for ip in candidates:
+        if _ip_is_blocked(ip):
+            raise InvalidAISettingsError(
+                "Base URL host is not allowed (private or local address)."
+            )
 
 ALLOWED_GEMINI_MODELS = (
     "gemini-3-flash-preview",
@@ -86,7 +167,41 @@ class AISettingsService:
             validated_at=ai_settings.validated_at,
         )
 
-    async def validate_configuration(self, api_key: str, model_name: str) -> None:
+    def _allow_local_endpoints(self) -> bool:
+        env = (get_settings().ENVIRONMENT or "").strip().upper()
+        return env in _LOCAL_ENV_NAMES
+
+    def _openai_client(self, api_key: str, base_url: str):
+        from openai import AsyncOpenAI
+
+        return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=20.0)
+
+    async def validate_configuration(
+        self,
+        *,
+        provider: str = PROVIDER_GEMINI,
+        api_key: str,
+        model_name: str,
+        base_url: str | None = None,
+        reasoning_effort: str | None = None,
+        allow_local: bool | None = None,
+    ) -> None:
+        if provider == PROVIDER_GEMINI:
+            await self._validate_gemini(api_key, model_name)
+        elif provider == PROVIDER_OPENAI:
+            if allow_local is None:
+                allow_local = self._allow_local_endpoints()
+            validate_base_url(base_url or "", allow_local=allow_local)
+            await self._validate_openai(
+                api_key=api_key,
+                base_url=base_url,
+                model_name=model_name,
+                reasoning_effort=reasoning_effort,
+            )
+        else:
+            raise InvalidAISettingsError("Unsupported AI provider.")
+
+    async def _validate_gemini(self, api_key: str, model_name: str) -> None:
         self.ensure_allowed_model(model_name)
         try:
             client = genai.Client(api_key=api_key)
@@ -103,42 +218,101 @@ class AISettingsService:
                 "Unable to validate that Gemini API key with the selected model."
             ) from exc
 
+    async def _validate_openai(
+        self,
+        *,
+        api_key: str,
+        base_url: str | None,
+        model_name: str,
+        reasoning_effort: str | None = None,
+    ) -> None:
+        extra_body = {"reasoning_effort": reasoning_effort} if reasoning_effort else None
+        try:
+            client = self._openai_client(api_key, base_url)
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": "Reply with OK."}],
+                extra_body=extra_body,
+            )
+            if not getattr(response, "choices", None):
+                raise InvalidAISettingsError(
+                    "OpenAI-compatible validation returned no choices."
+                )
+        except InvalidAISettingsError:
+            raise
+        except Exception as exc:
+            raise InvalidAISettingsError(
+                "Unable to validate the OpenAI-compatible endpoint with the selected model."
+            ) from exc
+
     async def upsert_settings(
         self,
         db: AsyncSession,
         user_id: str,
         *,
+        provider: str | None = None,
         api_key: str | None = None,
         model_name: str | None = None,
+        base_url: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> UserAISettings:
         existing = await self.get_settings(db, user_id)
-        if not existing and not api_key:
-            raise InvalidAISettingsError("Add a Gemini API key before selecting a model.")
+        current_provider = (existing.provider if existing else None) or PROVIDER_GEMINI
+        resolved_provider = provider or current_provider
+        if resolved_provider not in SUPPORTED_PROVIDERS:
+            raise InvalidAISettingsError("Unsupported AI provider.")
 
-        if existing:
-            resolved_api_key = api_key or self.decrypt_api_key(existing.encrypted_api_key)
-            resolved_model = model_name or existing.model_name
-        else:
-            resolved_api_key = api_key or ""
-            resolved_model = model_name or self.allowed_models[0]
+        # A saved API key only carries over while staying on the same provider.
+        switching = existing is not None and current_provider != resolved_provider
+        has_reusable_key = existing is not None and not switching
+        if not has_reusable_key and not api_key:
+            raise InvalidAISettingsError("Add an API key before saving these settings.")
 
-        await self.validate_configuration(resolved_api_key, resolved_model)
+        resolved_api_key = api_key or (
+            self.decrypt_api_key(existing.encrypted_api_key) if has_reusable_key else ""
+        )
+
+        if resolved_provider == PROVIDER_GEMINI:
+            resolved_model = (
+                model_name
+                or (existing.model_name if has_reusable_key else None)
+                or self.allowed_models[0]
+            )
+            resolved_base_url = None
+            resolved_reasoning = None
+        else:  # PROVIDER_OPENAI — full-config save; stale Gemini fields are dropped.
+            resolved_base_url = base_url or (existing.base_url if has_reusable_key else None)
+            if not resolved_base_url:
+                raise InvalidAISettingsError(
+                    "Base URL is required for OpenAI-compatible providers."
+                )
+            resolved_model = model_name or (existing.model_name if has_reusable_key else None)
+            if not resolved_model:
+                raise InvalidAISettingsError(
+                    "Enter a model ID for the OpenAI-compatible provider."
+                )
+            resolved_reasoning = reasoning_effort or None
+
+        await self.validate_configuration(
+            provider=resolved_provider,
+            api_key=resolved_api_key,
+            model_name=resolved_model,
+            base_url=resolved_base_url,
+            reasoning_effort=resolved_reasoning,
+        )
 
         if not existing:
-            existing = UserAISettings(
-                user_id=user_id,
-                encrypted_api_key=self.encrypt_api_key(resolved_api_key),
-                api_key_last4=resolved_api_key[-4:],
-                model_name=resolved_model,
-                validated_at=datetime.now(timezone.utc),
-            )
+            existing = UserAISettings(user_id=user_id)
             db.add(existing)
-        else:
-            if api_key:
-                existing.encrypted_api_key = self.encrypt_api_key(resolved_api_key)
-                existing.api_key_last4 = resolved_api_key[-4:]
-            existing.model_name = resolved_model
-            existing.validated_at = datetime.now(timezone.utc)
+
+        existing.provider = resolved_provider
+        if api_key or not has_reusable_key:
+            existing.encrypted_api_key = self.encrypt_api_key(resolved_api_key)
+            existing.api_key_last4 = resolved_api_key[-4:]
+        existing.model_name = resolved_model
+        existing.base_url = resolved_base_url
+        existing.reasoning_effort = resolved_reasoning
+        existing.validated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(existing)
