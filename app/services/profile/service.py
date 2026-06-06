@@ -73,8 +73,7 @@ class ProfileService:
                 )
                 result = await self.extractor.extract_and_structure_via_vision(
                     pdf_bytes,
-                    api_key=ai_settings.api_key,
-                    model_name=ai_settings.model_name,
+                    ai_settings=ai_settings,
                     user_id=profile.user_id,
                     reference_id=str(profile_id),
                 )

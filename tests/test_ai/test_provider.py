@@ -129,6 +129,29 @@ async def test_openai_inference_omits_reasoning_effort_by_default():
     assert "extra_body" not in captured
 
 
+def test_openai_build_messages_text_only_uses_string_content():
+    inf = _make_openai()
+    messages = inf._build_messages("Sys", ["a", "b"])
+    assert messages[0]["role"] == "system"
+    assert messages[-1]["role"] == "user"
+    assert messages[-1]["content"] == "a\n\nb"
+
+
+def test_openai_build_messages_converts_images_to_data_urls():
+    inf = _make_openai()
+    messages = inf._build_messages(
+        "Extract.",
+        ["page text", {"inline_data": {"mime_type": "image/jpeg", "data": "QUJD"}}],
+    )
+    user = messages[-1]
+    assert user["role"] == "user"
+    assert isinstance(user["content"], list)  # parts list once an image is present
+    types = [p["type"] for p in user["content"]]
+    assert "text" in types and "image_url" in types
+    image_part = next(p for p in user["content"] if p["type"] == "image_url")
+    assert image_part["image_url"]["url"] == "data:image/jpeg;base64,QUJD"
+
+
 @pytest.mark.asyncio
 async def test_openai_inference_includes_reasoning_effort_when_set():
     inf = _make_openai(reasoning_effort="high")

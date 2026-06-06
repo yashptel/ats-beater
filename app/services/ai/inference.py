@@ -289,12 +289,42 @@ class OpenAICompatibleInference:
             timeout=float(timeout) if timeout else None,
         )
 
+    @staticmethod
+    def _to_image_part(item: dict) -> dict | None:
+        """Convert a Gemini-style inline image dict to an OpenAI data-URL part."""
+        inline = item.get("inline_data") or item.get("inlineData")
+        if inline and inline.get("data"):
+            mime = inline.get("mime_type") or inline.get("mimeType") or "image/jpeg"
+            return {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{inline['data']}"},
+            }
+        if item.get("type") == "image_url":  # already an OpenAI-style part
+            return item
+        return None
+
     def _build_messages(self, system_prompt: str, inputs: list | None) -> list[dict]:
         messages: list[dict] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        texts = [item for item in (inputs or []) if isinstance(item, str)]
-        messages.append({"role": "user", "content": "\n\n".join(texts)})
+
+        parts: list[dict] = []
+        has_image = False
+        for item in inputs or []:
+            if isinstance(item, str):
+                parts.append({"type": "text", "text": item})
+            elif isinstance(item, dict):
+                image_part = self._to_image_part(item)
+                if image_part is not None:
+                    parts.append(image_part)
+                    has_image = True
+
+        if has_image:
+            # Vision endpoints require the multi-part content array.
+            messages.append({"role": "user", "content": parts})
+        else:
+            texts = [p["text"] for p in parts if p.get("type") == "text"]
+            messages.append({"role": "user", "content": "\n\n".join(texts)})
         return messages
 
     def _ensure_json_directive(self, messages: list[dict]) -> list[dict]:
