@@ -334,12 +334,35 @@ class OpenAICompatibleInference:
     def _ensure_json_directive(self, messages: list[dict]) -> list[dict]:
         # json_object mode requires the literal token "json" to appear in the prompt.
         directive = "Respond with a single valid JSON document and no markdown fences."
+        has_user_json = False
         for message in messages:
             if message["role"] == "system":
                 if "json" not in str(message["content"]).lower():
                     message["content"] = f"{message['content']}\n\n{directive}"
-                return messages
-        messages.insert(0, {"role": "system", "content": directive})
+            elif message["role"] == "user":
+                content = message["content"]
+                if isinstance(content, list):
+                    text_parts = [
+                        part for part in content
+                        if isinstance(part, dict) and part.get("type") == "text"
+                    ]
+                    has_user_json = any(
+                        "json" in str(part.get("text", "")).lower()
+                        for part in text_parts
+                    )
+                    if not has_user_json:
+                        content.insert(0, {"type": "text", "text": directive})
+                        has_user_json = True
+                else:
+                    has_user_json = "json" in str(content).lower()
+                    if not has_user_json:
+                        message["content"] = f"{content}\n\n{directive}" if content else directive
+                        has_user_json = True
+
+        if not any(message["role"] == "system" for message in messages):
+            messages.insert(0, {"role": "system", "content": directive})
+        if not has_user_json:
+            messages.append({"role": "user", "content": directive})
         return messages
 
     def _extract_text(self, response) -> str:

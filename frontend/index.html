@@ -211,6 +211,31 @@
       background-repeat: no-repeat; background-position: right 12px center;
     }
     select.input-field option { background: var(--deep); color: var(--text-primary); }
+    .model-suggest-wrap { position: relative; flex: 1; min-width: 0; }
+    .model-suggest-menu {
+      position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70;
+      max-height: 220px; overflow-y: auto;
+      background: rgba(15,27,46,0.98); backdrop-filter: blur(16px);
+      border: 1px solid rgba(1,169,219,0.24); border-radius: 4px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.35), 0 0 24px rgba(1,169,219,0.08);
+      padding: 4px;
+    }
+    .model-suggest-option {
+      width: 100%; display: block; text-align: left;
+      background: transparent; border: 0; border-radius: 3px;
+      color: var(--text-secondary); cursor: pointer;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.35;
+      padding: 9px 10px; transition: all 0.15s ease;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .model-suggest-option:hover,
+    .model-suggest-option.active {
+      background: rgba(1,169,219,0.10); color: var(--text-primary);
+    }
+    .model-suggest-empty {
+      padding: 10px; color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    }
 
     /* ===== BADGES ===== */
     .badge {

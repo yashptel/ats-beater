@@ -164,6 +164,34 @@ def test_openai_build_messages_converts_images_to_data_urls():
 
 
 @pytest.mark.asyncio
+async def test_openai_structured_vision_puts_json_directive_in_user_content():
+    inf = _make_openai()
+    captured = {}
+
+    async def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _completion('{"name": "Jane", "email": "jane@x.com"}')
+
+    inf.client = MagicMock()
+    inf.client.chat.completions.create = fake_create
+    await inf.run_inference(
+        system_prompt="Extract the person.",
+        inputs=[
+            "page text",
+            {"inline_data": {"mime_type": "image/jpeg", "data": "QUJD"}},
+        ],
+        structured_output_schema=_Person,
+    )
+
+    user_content = captured["messages"][-1]["content"]
+    assert isinstance(user_content, list)
+    assert any(
+        part.get("type") == "text" and "json" in part.get("text", "").lower()
+        for part in user_content
+    )
+
+
+@pytest.mark.asyncio
 async def test_openai_inference_includes_reasoning_effort_when_set():
     inf = _make_openai(reasoning_effort="high")
     captured = {}
