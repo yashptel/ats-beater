@@ -43,6 +43,7 @@ async def _create_and_log(
             model_name=model, user_id=user_id, purpose=purpose, reference_id=reference_id,
             input_tokens=0, output_tokens=0, total_tokens=0, cached_tokens=0,
             response_time_ms=elapsed_ms, success=False, error_message=str(exc)[:500],
+            provider="openai_compatible",
         )
         raise
 
@@ -54,6 +55,7 @@ async def _create_and_log(
         output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
         total_tokens=getattr(usage, "total_tokens", 0) if usage else 0,
         cached_tokens=0, response_time_ms=elapsed_ms, success=True, error_message=None,
+        provider="openai_compatible",
     )
     return response
 

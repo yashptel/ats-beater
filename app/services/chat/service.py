@@ -424,6 +424,7 @@ class ChatService:
                 response_time_ms=elapsed_ms,
                 success=False,
                 error_message=str(exc)[:500],
+                provider="gemini",
             )
             raise
 
@@ -441,6 +442,7 @@ class ChatService:
             response_time_ms=elapsed_ms,
             success=True,
             error_message=None,
+            provider="gemini",
         )
         return response
 

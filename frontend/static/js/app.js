@@ -3338,13 +3338,14 @@ const AdminPage = {
                 <div class="overflow-x-auto scroll-hint">
                   <table class="data-table admin-table">
                     <thead><tr>
-                      <th>Model</th><th>Requests</th><th>Input</th><th>Output</th>
+                      <th>Provider</th><th>Model</th><th>Requests</th><th>Input</th><th>Output</th>
                       <th class="hidden md:table-cell">Cached</th>
                       <th class="hidden md:table-cell">Avg ms</th>
                       <th>Est. Cost</th>
                     </tr></thead>
                     <tbody>
-                      <tr v-for="m in overview.llm_summary.by_model" :key="m.model_name">
+                      <tr v-for="m in overview.llm_summary.by_model" :key="(m.provider || 'gemini') + '-' + m.model_name">
+                        <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ m.provider === 'openai_compatible' ? 'OpenAI' : 'Gemini' }}</td>
                         <td class="font-mono text-white text-[11px]">{{ m.model_name }}</td>
                         <td class="font-mono">{{ m.request_count }}</td>
                         <td class="font-mono">{{ formatTokens(m.input_tokens) }}</td>
@@ -3355,7 +3356,7 @@ const AdminPage = {
                       </tr>
                     </tbody>
                     <tfoot>
-                      <tr><td colspan="6" class="text-right font-mono text-[10px]" style="color:var(--text-dim)">TOTAL EST. COST</td>
+                      <tr><td colspan="7" class="text-right font-mono text-[10px]" style="color:var(--text-dim)">TOTAL EST. COST</td>
                         <td class="font-mono font-bold" style="color:var(--orange)">\${{ overview.llm_summary.total_estimated_cost_usd.toFixed(3) }}</td>
                       </tr>
                     </tfoot>

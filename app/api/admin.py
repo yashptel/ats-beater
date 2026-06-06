@@ -147,21 +147,23 @@ async def admin_overview(
 
     llm_by_model_rows = (await db.execute(
         select(
+            LLMRequest.provider,
             LLMRequest.model_name,
             func.count(LLMRequest.id),
             func.coalesce(func.sum(LLMRequest.input_tokens), 0),
             func.coalesce(func.sum(LLMRequest.output_tokens), 0),
             func.coalesce(func.sum(LLMRequest.cached_tokens), 0),
             func.coalesce(func.avg(LLMRequest.response_time_ms), 0),
-        ).group_by(LLMRequest.model_name)
+        ).group_by(LLMRequest.provider, LLMRequest.model_name)
     )).all()
 
     by_model = []
     total_estimated_cost = 0.0
-    for model_name, req_count, inp, outp, cached, avg_ms in llm_by_model_rows:
+    for provider, model_name, req_count, inp, outp, cached, avg_ms in llm_by_model_rows:
         cost = _estimate_cost(model_name, inp, outp)
         total_estimated_cost += cost
         by_model.append({
+            "provider": provider,
             "model_name": model_name,
             "request_count": req_count,
             "input_tokens": inp,
@@ -459,6 +461,7 @@ async def list_llm_requests(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=200),
     purpose: str = Query("", max_length=50),
+    provider: str = Query("", max_length=40),
     model_name: str = Query("", max_length=100),
     success: bool | None = Query(None),
     search: str = Query("", max_length=100),
@@ -476,6 +479,9 @@ async def list_llm_requests(
     if purpose:
         base = base.where(LLMRequest.purpose == purpose)
         count_base = count_base.where(LLMRequest.purpose == purpose)
+    if provider:
+        base = base.where(LLMRequest.provider == provider)
+        count_base = count_base.where(LLMRequest.provider == provider)
     if model_name:
         base = base.where(LLMRequest.model_name == model_name)
         count_base = count_base.where(LLMRequest.model_name == model_name)
@@ -503,6 +509,7 @@ async def list_llm_requests(
             "user_email": email,
             "purpose": req.purpose,
             "reference_id": req.reference_id,
+            "provider": req.provider,
             "model_name": req.model_name,
             "input_tokens": req.input_tokens,
             "output_tokens": req.output_tokens,

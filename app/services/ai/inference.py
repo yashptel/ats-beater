@@ -25,6 +25,7 @@ async def _log_request(
     response_time_ms: int,
     success: bool,
     error_message: str | None,
+    provider: str = "gemini",
 ) -> None:
     """Persist an LLMRequest row using an independent DB session.
 
@@ -41,6 +42,7 @@ async def _log_request(
                 user_id=user_id,
                 purpose=purpose,
                 reference_id=reference_id,
+                provider=provider,
                 model_name=model_name,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -136,6 +138,7 @@ class GeminiInference:
                 reference_id=reference_id, input_tokens=0, output_tokens=0,
                 total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
                 success=False, error_message=f"Timeout after {timeout}s",
+                provider="gemini",
             )
             raise
         except Exception as exc:
@@ -145,6 +148,7 @@ class GeminiInference:
                 reference_id=reference_id, input_tokens=0, output_tokens=0,
                 total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
                 success=False, error_message=str(exc)[:500],
+                provider="gemini",
             )
             raise
 
@@ -169,6 +173,7 @@ class GeminiInference:
             output_tokens=output_tokens, total_tokens=total_tokens,
             cached_tokens=cached_tokens, response_time_ms=elapsed_ms,
             success=True, error_message=None,
+            provider="gemini",
         )
 
         return response
@@ -376,6 +381,7 @@ class OpenAICompatibleInference:
                 reference_id=reference_id, input_tokens=0, output_tokens=0,
                 total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
                 success=False, error_message=str(exc)[:500],
+                provider="openai_compatible",
             )
             raise
 
@@ -398,6 +404,7 @@ class OpenAICompatibleInference:
             output_tokens=output_tokens, total_tokens=total_tokens,
             cached_tokens=0, response_time_ms=elapsed_ms,
             success=True, error_message=None,
+            provider="openai_compatible",
         )
         return response
 

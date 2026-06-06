@@ -12,6 +12,9 @@ class LLMRequest(TimestampMixin, Base):
     )
     purpose: Mapped[str] = mapped_column(String, nullable=False)
     reference_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="gemini", default="gemini"
+    )
     model_name: Mapped[str] = mapped_column(String, nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -24,4 +27,5 @@ class LLMRequest(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_llm_requests_purpose", "purpose"),
         Index("ix_llm_requests_created_at", "created_at"),
+        Index("ix_llm_requests_provider", "provider"),
     )
