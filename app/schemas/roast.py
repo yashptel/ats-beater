@@ -14,6 +14,8 @@ class RoastPoint(BaseModel):
             return {"emoji": "🔥", "text": data}
         if isinstance(data, dict) and "emoji" not in data and "text" in data:
             return {**data, "emoji": "🔥"}
+        if isinstance(data, dict) and "text" not in data and "point" in data:
+            return {"emoji": data.get("emoji", "🔥"), "text": data["point"]}
         return data
 
 
@@ -53,6 +55,13 @@ class RoastResult(BaseModel):
                 if key in values:
                     values["actual_feedback"] = values[key]
                     break
+            else:
+                verdict = str(values.get("verdict") or "").strip()
+                prefix = f"{verdict} " if verdict else ""
+                values["actual_feedback"] = (
+                    f"{prefix}Address the ATS checklist items, tighten the resume structure, "
+                    "and make the strongest experience easier to scan."
+                )
         if "headline" not in values:
             values["headline"] = values.get("verdict") or "Resume Roast"
 

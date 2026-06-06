@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from logging import getLogger
-from typing import Type
+from typing import Any, Type
 from pydantic import BaseModel, ValidationError
 from google import genai
 from google.genai import types
@@ -12,6 +12,8 @@ from app.services.ai.retry import retry_decor
 PRIMARY_TIMEOUT_SECONDS = 60
 
 logger = getLogger(__name__)
+MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS = 2
+MAX_REPAIR_JSON_CHARS = 4000
 
 
 async def _log_request(
@@ -90,6 +92,107 @@ def parse_structured_output(
             for o in parsed_content
         ]
     return structured_output_schema.model_validate(parsed_content).model_dump()
+
+
+def _compact_json_schema(value: Any) -> Any:
+    """Remove prose-only JSON schema fields so repair prompts stay focused."""
+    if isinstance(value, dict):
+        return {
+            key: _compact_json_schema(item)
+            for key, item in value.items()
+            if key not in {"title", "description", "default", "examples"}
+        }
+    if isinstance(value, list):
+        return [_compact_json_schema(item) for item in value]
+    return value
+
+
+def build_structured_output_contract(
+    structured_output_schema: Type[BaseModel],
+    is_list: bool = False,
+) -> str:
+    schema_name = structured_output_schema.__name__
+    schema = _compact_json_schema(structured_output_schema.model_json_schema())
+    root_type = "JSON array" if is_list else "JSON object"
+    schema_json = json.dumps(schema, ensure_ascii=True, separators=(",", ":"))
+    if is_list:
+        schema_json = (
+            '{"type":"array","items":'
+            f"{schema_json}"
+            "}"
+        )
+    return (
+        "STRUCTURED OUTPUT CONTRACT\n"
+        f"Return exactly one valid {root_type} matching the {schema_name} JSON schema.\n"
+        "Use the exact field names from the schema. Include every required field. "
+        "Do not add markdown fences, comments, or prose outside the JSON.\n"
+        f"JSON schema: {schema_json}"
+    )
+
+
+def format_structured_output_repair_instruction(
+    *,
+    raw_content: str,
+    error: Exception,
+    structured_output_schema: Type[BaseModel],
+    is_list: bool = False,
+) -> str:
+    schema_name = structured_output_schema.__name__
+    errors = format_structured_output_error(error)
+    invalid_json = raw_content.strip()
+    if len(invalid_json) > MAX_REPAIR_JSON_CHARS:
+        invalid_json = f"{invalid_json[:MAX_REPAIR_JSON_CHARS]}...[truncated]"
+    return (
+        "Your previous structured JSON response did not validate.\n"
+        f"Schema: {schema_name}\n"
+        f"Validation errors: {errors}\n\n"
+        f"{build_structured_output_contract(structured_output_schema, is_list)}\n\n"
+        "Previous invalid JSON/content:\n"
+        f"{invalid_json}\n\n"
+        "Return only the corrected JSON. Do not include markdown fences or explanations."
+    )
+
+
+def format_structured_output_error(error: Exception) -> str:
+    if not isinstance(error, ValidationError):
+        return str(error)
+
+    compact_errors = [
+        {
+            "loc": item.get("loc", ()),
+            "msg": item.get("msg", ""),
+            "type": item.get("type", ""),
+        }
+        for item in error.errors()
+    ]
+    return json.dumps(compact_errors, ensure_ascii=True, default=str)
+
+
+def _log_structured_validation_failure(
+    *,
+    provider: str,
+    model_name: str,
+    purpose: str | None,
+    structured_output_schema: Type[BaseModel],
+    attempt: int,
+    error: Exception,
+    raw_content: str,
+    final: bool = False,
+) -> None:
+    snippet = raw_content.strip().replace("\n", " ")[:500]
+    log_fn = logger.error if final else logger.warning
+    log_fn(
+        "Schema validation failed%s: provider=%s model=%s purpose=%s schema=%s "
+        "attempt=%s error=%s raw_snippet=%r",
+        " after retries" if final else "",
+        provider,
+        model_name,
+        purpose,
+        structured_output_schema.__name__,
+        attempt,
+        format_structured_output_error(error)[:500],
+        snippet,
+    )
 
 
 class GeminiInference:
@@ -227,25 +330,26 @@ class GeminiInference:
                 structured_output_schema, BaseModel
             ):
                 config_params["response_schema"] = structured_output_schema
+            contract = build_structured_output_contract(
+                structured_output_schema, is_structured_output_list
+            )
+            config_params["system_instruction"] = f"{system_prompt}\n\n{contract}"
 
         call_kwargs = dict(user_id=user_id, purpose=purpose, reference_id=reference_id)
+        current_inputs = list(inputs or [])
 
         async def _get_response():
             try:
                 return await self._call_api(
-                    self.model, config_params, inputs,
+                    self.model, config_params, current_inputs,
                     timeout=primary_timeout, **call_kwargs,
                 )
             except Exception:
                 return await self._call_api_with_retry(
-                    self.model, config_params, inputs, **call_kwargs,
+                    self.model, config_params, current_inputs, **call_kwargs,
                 )
 
-        # Retry on schema validation failures — the AI returned valid JSON but it
-        # doesn't conform to the Pydantic schema. Re-calling gives the model a
-        # fresh chance to produce valid output.
-        max_validation_retries = 2
-        for attempt in range(1 + max_validation_retries):
+        for attempt in range(1 + MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS):
             response = await _get_response()
             response_str: str = response.text.strip()
 
@@ -257,14 +361,36 @@ class GeminiInference:
                     response_str, structured_output_schema, is_structured_output_list
                 )
             except (json.JSONDecodeError, ValidationError) as e:
-                if attempt >= max_validation_retries:
-                    logger.error(
-                        f"Schema validation failed after {attempt + 1} attempts: {e}"
+                if attempt >= MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS:
+                    _log_structured_validation_failure(
+                        provider="gemini",
+                        model_name=self.model,
+                        purpose=purpose,
+                        structured_output_schema=structured_output_schema,
+                        attempt=attempt + 1,
+                        error=e,
+                        raw_content=response_str,
+                        final=True,
                     )
                     raise
-                logger.warning(
-                    f"Schema validation failed (attempt {attempt + 1}), retrying: {e}"
+                _log_structured_validation_failure(
+                    provider="gemini",
+                    model_name=self.model,
+                    purpose=purpose,
+                    structured_output_schema=structured_output_schema,
+                    attempt=attempt + 1,
+                    error=e,
+                    raw_content=response_str,
                 )
+                current_inputs = [
+                    *current_inputs,
+                    format_structured_output_repair_instruction(
+                        raw_content=response_str,
+                        error=e,
+                        structured_output_schema=structured_output_schema,
+                        is_list=is_structured_output_list,
+                    ),
+                ]
 
 
 class OpenAICompatibleInference:
@@ -365,6 +491,22 @@ class OpenAICompatibleInference:
             messages.append({"role": "user", "content": directive})
         return messages
 
+    def _add_structured_contract(
+        self,
+        messages: list[dict],
+        structured_output_schema: Type[BaseModel],
+        is_list: bool,
+    ) -> list[dict]:
+        contract = build_structured_output_contract(structured_output_schema, is_list)
+        insert_at = 0
+        while insert_at < len(messages) and messages[insert_at]["role"] == "system":
+            insert_at += 1
+        return [
+            *messages[:insert_at],
+            {"role": "system", "content": contract},
+            *messages[insert_at:],
+        ]
+
     def _extract_text(self, response) -> str:
         choices = getattr(response, "choices", None) or []
         if not choices:
@@ -447,9 +589,11 @@ class OpenAICompatibleInference:
         messages = self._build_messages(system_prompt, inputs)
         if structured_output_schema:
             messages = self._ensure_json_directive(messages)
+            messages = self._add_structured_contract(
+                messages, structured_output_schema, is_structured_output_list
+            )
 
-        max_validation_retries = 2
-        for attempt in range(1 + max_validation_retries):
+        for attempt in range(1 + MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS):
             response = await self._call_api(
                 messages,
                 structured=bool(structured_output_schema),
@@ -468,11 +612,36 @@ class OpenAICompatibleInference:
                     response_str, structured_output_schema, is_structured_output_list
                 )
             except (json.JSONDecodeError, ValidationError) as e:
-                if attempt >= max_validation_retries:
-                    logger.error(
-                        f"Schema validation failed after {attempt + 1} attempts: {e}"
+                if attempt >= MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS:
+                    _log_structured_validation_failure(
+                        provider="openai_compatible",
+                        model_name=self.model,
+                        purpose=purpose,
+                        structured_output_schema=structured_output_schema,
+                        attempt=attempt + 1,
+                        error=e,
+                        raw_content=response_str,
+                        final=True,
                     )
                     raise
-                logger.warning(
-                    f"Schema validation failed (attempt {attempt + 1}), retrying: {e}"
+                _log_structured_validation_failure(
+                    provider="openai_compatible",
+                    model_name=self.model,
+                    purpose=purpose,
+                    structured_output_schema=structured_output_schema,
+                    attempt=attempt + 1,
+                    error=e,
+                    raw_content=response_str,
                 )
+                messages = [
+                    *messages,
+                    {
+                        "role": "user",
+                        "content": format_structured_output_repair_instruction(
+                            raw_content=response_str,
+                            error=e,
+                            structured_output_schema=structured_output_schema,
+                            is_list=is_structured_output_list,
+                        ),
+                    },
+                ]

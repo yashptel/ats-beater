@@ -138,7 +138,7 @@ def test_roast_result_accepts_common_openai_compatible_near_miss_shape():
     data = {
         "roast": [
             "This resume is trying to be a novel and a spreadsheet at the same time.",
-            {"text": "The skills section reads like keyword soup."},
+            {"point": "The skills section reads like keyword soup."},
         ],
         "feedback": "Trim the layout, make bullets measurable, and tighten the hierarchy.",
         "score": 4,
@@ -164,4 +164,28 @@ def test_roast_result_accepts_common_openai_compatible_near_miss_shape():
     assert [point.emoji for point in result.roast_points] == ["🔥", "🔥"]
     assert result.actual_feedback == (
         "Trim the layout, make bullets measurable, and tighten the hierarchy."
+    )
+
+
+def test_roast_result_falls_back_when_provider_omits_feedback_entirely():
+    data = {
+        "headline": "This resume needs a map.",
+        "roast": ["The layout makes recruiters work too hard."],
+        "score": 5,
+        "verdict": "Readable, but not recruiter-friendly yet.",
+        "ats_checklist": [
+            {
+                "label": "Quantified Achievements",
+                "passed": False,
+                "detail": "Most bullets lack concrete metrics.",
+                "category": "content",
+            },
+        ],
+    }
+
+    result = RoastResult(**data)
+
+    assert result.actual_feedback == (
+        "Readable, but not recruiter-friendly yet. Address the ATS checklist items, "
+        "tighten the resume structure, and make the strongest experience easier to scan."
     )

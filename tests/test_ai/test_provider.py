@@ -4,7 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel
 
-from app.services.ai.inference import GeminiInference, OpenAICompatibleInference
+from app.schemas.custom_resume import CustomResumeInfo
+from app.schemas.roast import RoastResult
+from app.services.ai.inference import (
+    GeminiInference,
+    OpenAICompatibleInference,
+    build_structured_output_contract,
+)
 from app.services.ai.openai_client import (
     OPENAI_COMPATIBLE_USER_AGENT,
     build_openai_compatible_client,
@@ -53,6 +59,18 @@ def test_openai_compatible_client_uses_neutral_user_agent():
     assert client.default_headers["User-Agent"] == OPENAI_COMPATIBLE_USER_AGENT
 
 
+def test_structured_output_contract_includes_required_schema_fields():
+    roast_contract = build_structured_output_contract(RoastResult)
+    resume_contract = build_structured_output_contract(CustomResumeInfo)
+
+    assert "headline" in roast_contract
+    assert "roast_points" in roast_contract
+    assert "actual_feedback" in roast_contract
+    assert "past_experience" in resume_contract
+    assert "projects" in resume_contract
+    assert "email" in resume_contract
+
+
 def _completion(content):
     return SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
@@ -81,6 +99,8 @@ async def test_openai_inference_structured_output_parses_json():
     # Request payload shape: system + user messages, JSON response_format hint.
     assert captured["model"] == "qwen-max"
     assert captured["messages"][0]["role"] == "system"
+    assert any("STRUCTURED OUTPUT CONTRACT" in m["content"] for m in captured["messages"])
+    assert any("name" in m["content"] and "email" in m["content"] for m in captured["messages"])
     assert captured["messages"][-1]["role"] == "user"
     assert "Jane jane@x.com" in captured["messages"][-1]["content"]
     assert captured["response_format"] == {"type": "json_object"}
@@ -114,6 +134,10 @@ async def test_openai_inference_retries_on_invalid_then_succeeds():
     )
     assert result == {"name": "Bo", "email": "bo@x.com"}
     assert inf.client.chat.completions.create.await_count == 2
+    second_call = inf.client.chat.completions.create.await_args_list[1].kwargs
+    assert "Validation errors" in second_call["messages"][-1]["content"]
+    assert "Previous invalid JSON/content" in second_call["messages"][-1]["content"]
+    assert "name" in second_call["messages"][-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -188,6 +212,37 @@ async def test_openai_structured_vision_puts_json_directive_in_user_content():
     assert any(
         part.get("type") == "text" and "json" in part.get("text", "").lower()
         for part in user_content
+    )
+
+
+@pytest.mark.asyncio
+async def test_openai_structured_vision_repair_preserves_image_parts():
+    inf = _make_openai()
+    inf.client = MagicMock()
+    inf.client.chat.completions.create = AsyncMock(
+        side_effect=[
+            _completion('{"name": "Jane"}'),
+            _completion('{"name": "Jane", "email": "jane@x.com"}'),
+        ]
+    )
+
+    result = await inf.run_inference(
+        system_prompt="Extract the person.",
+        inputs=[
+            "page text",
+            {"inline_data": {"mime_type": "image/jpeg", "data": "QUJD"}},
+        ],
+        structured_output_schema=_Person,
+    )
+
+    assert result == {"name": "Jane", "email": "jane@x.com"}
+    second_call = inf.client.chat.completions.create.await_args_list[1].kwargs
+    assert second_call["messages"][-1]["role"] == "user"
+    assert "Validation errors" in second_call["messages"][-1]["content"]
+    assert any(
+        isinstance(message.get("content"), list)
+        and any(part.get("type") == "image_url" for part in message["content"])
+        for message in second_call["messages"]
     )
 
 
