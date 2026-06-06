@@ -50,6 +50,68 @@ async def _seed_llm_requests(admin_client):
             break
 
 
+async def _seed_provider_mix(admin_client):
+    from app.database.session import get_db
+    app = admin_client._transport.app
+    override = app.dependency_overrides.get(get_db)
+    async for db in override():
+        db.add_all([
+            LLMRequest(
+                user_id="admin-user-id", purpose="resume_tailoring",
+                provider="gemini", model_name="gemini-3.1-pro-preview",
+                input_tokens=10, output_tokens=20, total_tokens=30,
+                response_time_ms=100, success=True,
+            ),
+            LLMRequest(
+                user_id="admin-user-id", purpose="resume_tailoring",
+                provider="openai_compatible", model_name="qwen-max",
+                input_tokens=5, output_tokens=15, total_tokens=20,
+                response_time_ms=200, success=True,
+            ),
+            LLMRequest(
+                user_id="admin-user-id", purpose="resume_tailoring",
+                provider="openai_compatible", model_name="qwen-max",
+                input_tokens=7, output_tokens=3, total_tokens=10,
+                response_time_ms=50, success=False, error_message="boom",
+            ),
+        ])
+        await db.commit()
+        break
+
+
+@pytest.mark.asyncio
+async def test_overview_summary_groups_by_provider_and_model(admin_client):
+    await _seed_provider_mix(admin_client)
+    resp = await admin_client.get("/admin/overview")
+    assert resp.status_code == 200
+    by_model = resp.json()["llm_summary"]["by_model"]
+    keyed = {(e["provider"], e["model_name"]): e for e in by_model}
+    assert ("gemini", "gemini-3.1-pro-preview") in keyed
+    assert ("openai_compatible", "qwen-max") in keyed
+    # The two qwen-max rows (same provider+model) collapse into one group.
+    assert keyed[("openai_compatible", "qwen-max")]["request_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_requests_list_includes_provider(admin_client):
+    await _seed_provider_mix(admin_client)
+    resp = await admin_client.get("/admin/llm-requests")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert all("provider" in it for it in items)
+    assert {it["provider"] for it in items} == {"gemini", "openai_compatible"}
+
+
+@pytest.mark.asyncio
+async def test_filter_llm_requests_by_provider(admin_client):
+    await _seed_provider_mix(admin_client)
+    resp = await admin_client.get("/admin/llm-requests?provider=openai_compatible")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert all(it["provider"] == "openai_compatible" for it in data["items"])
+
+
 @pytest.mark.asyncio
 async def test_list_llm_requests(admin_client):
     await _seed_llm_requests(admin_client)
@@ -64,7 +126,7 @@ async def test_list_llm_requests(admin_client):
     # Verify all expected fields present
     item = data["items"][0]
     expected_keys = {
-        "id", "user_email", "purpose", "reference_id", "model_name",
+        "id", "user_email", "purpose", "reference_id", "provider", "model_name",
         "input_tokens", "output_tokens", "total_tokens", "cached_tokens",
         "response_time_ms", "success", "error_message", "created_at",
     }

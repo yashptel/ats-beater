@@ -25,6 +25,7 @@ async def _log_request(
     response_time_ms: int,
     success: bool,
     error_message: str | None,
+    provider: str = "gemini",
 ) -> None:
     """Persist an LLMRequest row using an independent DB session.
 
@@ -41,6 +42,7 @@ async def _log_request(
                 user_id=user_id,
                 purpose=purpose,
                 reference_id=reference_id,
+                provider=provider,
                 model_name=model_name,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -56,6 +58,39 @@ async def _log_request(
         logger.debug("Failed to persist LLMRequest row", exc_info=True)
 
 
+def parse_structured_output(
+    raw_content: str,
+    structured_output_schema: Type[BaseModel] | None,
+    is_list: bool = False,
+) -> dict | list[dict] | str:
+    """Strip markdown fences and parse/validate JSON against a Pydantic schema.
+
+    Provider-agnostic — both the Gemini and OpenAI-compatible inference paths use
+    this so Pydantic validation stays the single authority for structured output.
+    """
+    json_str = raw_content.strip()
+    if json_str.startswith("```json"):
+        json_str = json_str[7:]
+    elif json_str.startswith("```"):
+        json_str = json_str[3:]
+    if json_str.endswith("```"):
+        json_str = json_str[:-3]
+    json_str = json_str.strip()
+
+    if not structured_output_schema:
+        return json_str
+
+    parsed_content = json.loads(json_str)
+    if is_list:
+        if isinstance(parsed_content, dict):
+            parsed_content = [parsed_content]
+        return [
+            structured_output_schema.model_validate(o).model_dump()
+            for o in parsed_content
+        ]
+    return structured_output_schema.model_validate(parsed_content).model_dump()
+
+
 class GeminiInference:
     def __init__(self, *, api_key: str, model_name: str):
         self.model = model_name
@@ -67,27 +102,7 @@ class GeminiInference:
         structured_output_schema: Type[BaseModel] | None,
         is_list: bool = False,
     ) -> dict | list[dict] | str:
-        json_str = raw_content.strip()
-        if json_str.startswith("```json"):
-            json_str = json_str[7:]
-        elif json_str.startswith("```"):
-            json_str = json_str[3:]
-        if json_str.endswith("```"):
-            json_str = json_str[:-3]
-        json_str = json_str.strip()
-
-        if not structured_output_schema:
-            return json_str
-
-        parsed_content = json.loads(json_str)
-        if is_list:
-            if isinstance(parsed_content, dict):
-                parsed_content = [parsed_content]
-            return [
-                structured_output_schema.model_validate(o).model_dump()
-                for o in parsed_content
-            ]
-        return structured_output_schema.model_validate(parsed_content).model_dump()
+        return parse_structured_output(raw_content, structured_output_schema, is_list)
 
     async def _call_api(
         self,
@@ -123,6 +138,7 @@ class GeminiInference:
                 reference_id=reference_id, input_tokens=0, output_tokens=0,
                 total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
                 success=False, error_message=f"Timeout after {timeout}s",
+                provider="gemini",
             )
             raise
         except Exception as exc:
@@ -132,6 +148,7 @@ class GeminiInference:
                 reference_id=reference_id, input_tokens=0, output_tokens=0,
                 total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
                 success=False, error_message=str(exc)[:500],
+                provider="gemini",
             )
             raise
 
@@ -156,6 +173,7 @@ class GeminiInference:
             output_tokens=output_tokens, total_tokens=total_tokens,
             cached_tokens=cached_tokens, response_time_ms=elapsed_ms,
             success=True, error_message=None,
+            provider="gemini",
         )
 
         return response
@@ -235,6 +253,196 @@ class GeminiInference:
 
             try:
                 return self.parse_output(
+                    response_str, structured_output_schema, is_structured_output_list
+                )
+            except (json.JSONDecodeError, ValidationError) as e:
+                if attempt >= max_validation_retries:
+                    logger.error(
+                        f"Schema validation failed after {attempt + 1} attempts: {e}"
+                    )
+                    raise
+                logger.warning(
+                    f"Schema validation failed (attempt {attempt + 1}), retrying: {e}"
+                )
+
+
+class OpenAICompatibleInference:
+    """Chat Completions inference for OpenAI-compatible endpoints.
+
+    Mirrors GeminiInference.run_inference so feature services stay
+    provider-agnostic. Pydantic parse/validate/retry remains the structured
+    output authority — response_format is only a best-effort hint.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model_name: str,
+        base_url: str,
+        reasoning_effort: str | None = None,
+        timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
+    ):
+        from openai import AsyncOpenAI
+
+        self.model = model_name
+        self.base_url = base_url
+        self.reasoning_effort = reasoning_effort
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=float(timeout) if timeout else None,
+        )
+
+    @staticmethod
+    def _to_image_part(item: dict) -> dict | None:
+        """Convert a Gemini-style inline image dict to an OpenAI data-URL part."""
+        inline = item.get("inline_data") or item.get("inlineData")
+        if inline and inline.get("data"):
+            mime = inline.get("mime_type") or inline.get("mimeType") or "image/jpeg"
+            return {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{inline['data']}"},
+            }
+        if item.get("type") == "image_url":  # already an OpenAI-style part
+            return item
+        return None
+
+    def _build_messages(self, system_prompt: str, inputs: list | None) -> list[dict]:
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        parts: list[dict] = []
+        has_image = False
+        for item in inputs or []:
+            if isinstance(item, str):
+                parts.append({"type": "text", "text": item})
+            elif isinstance(item, dict):
+                image_part = self._to_image_part(item)
+                if image_part is not None:
+                    parts.append(image_part)
+                    has_image = True
+
+        if has_image:
+            # Vision endpoints require the multi-part content array.
+            messages.append({"role": "user", "content": parts})
+        else:
+            texts = [p["text"] for p in parts if p.get("type") == "text"]
+            messages.append({"role": "user", "content": "\n\n".join(texts)})
+        return messages
+
+    def _ensure_json_directive(self, messages: list[dict]) -> list[dict]:
+        # json_object mode requires the literal token "json" to appear in the prompt.
+        directive = "Respond with a single valid JSON document and no markdown fences."
+        for message in messages:
+            if message["role"] == "system":
+                if "json" not in str(message["content"]).lower():
+                    message["content"] = f"{message['content']}\n\n{directive}"
+                return messages
+        messages.insert(0, {"role": "system", "content": directive})
+        return messages
+
+    def _extract_text(self, response) -> str:
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            return ""
+        message = getattr(choices[0], "message", None)
+        content = getattr(message, "content", None) if message else None
+        return (content or "").strip()
+
+    async def _call_api(
+        self,
+        messages: list[dict],
+        *,
+        structured: bool,
+        temperature: float,
+        user_id: str | None,
+        purpose: str | None,
+        reference_id: str | None,
+    ):
+        t0 = time.monotonic()
+        request_kwargs: dict = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if structured:
+            request_kwargs["response_format"] = {"type": "json_object"}
+        if self.reasoning_effort:
+            request_kwargs["extra_body"] = {"reasoning_effort": self.reasoning_effort}
+
+        try:
+            response = await self.client.chat.completions.create(**request_kwargs)
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            await _log_request(
+                model_name=self.model, user_id=user_id, purpose=purpose,
+                reference_id=reference_id, input_tokens=0, output_tokens=0,
+                total_tokens=0, cached_tokens=0, response_time_ms=elapsed_ms,
+                success=False, error_message=str(exc)[:500],
+                provider="openai_compatible",
+            )
+            raise
+
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        log_fn = logger.warning if elapsed_ms > 60000 else logger.info
+        log_fn(
+            f"Inference complete: model={self.model}, "
+            f"tokens={input_tokens}/{output_tokens}/{total_tokens}, "
+            f"time={elapsed_ms}ms, purpose={purpose}"
+            f"{' (SLOW >60s)' if elapsed_ms > 60000 else ''}"
+        )
+        await _log_request(
+            model_name=self.model, user_id=user_id, purpose=purpose,
+            reference_id=reference_id, input_tokens=input_tokens,
+            output_tokens=output_tokens, total_tokens=total_tokens,
+            cached_tokens=0, response_time_ms=elapsed_ms,
+            success=True, error_message=None,
+            provider="openai_compatible",
+        )
+        return response
+
+    async def run_inference(
+        self,
+        system_prompt: str,
+        inputs: list | None = None,
+        structured_output_schema: Type[BaseModel] | None = None,
+        is_structured_output_list: bool = False,
+        temperature: float = 0.1,
+        *,
+        user_id: str | None = None,
+        purpose: str | None = None,
+        reference_id: str | None = None,
+        thinking_level: str = "LOW",
+        primary_timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
+    ) -> str | dict | list:
+        messages = self._build_messages(system_prompt, inputs)
+        if structured_output_schema:
+            messages = self._ensure_json_directive(messages)
+
+        max_validation_retries = 2
+        for attempt in range(1 + max_validation_retries):
+            response = await self._call_api(
+                messages,
+                structured=bool(structured_output_schema),
+                temperature=temperature,
+                user_id=user_id,
+                purpose=purpose,
+                reference_id=reference_id,
+            )
+            response_str = self._extract_text(response)
+
+            if not structured_output_schema:
+                return response_str
+
+            try:
+                return parse_structured_output(
                     response_str, structured_output_schema, is_structured_output_list
                 )
             except (json.JSONDecodeError, ValidationError) as e:

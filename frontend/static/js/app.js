@@ -189,6 +189,7 @@ const useAuthStore = defineStore('auth', {
     isSuperAdmin: (s) => !!(s.user && s.user.is_super_admin),
     tenantName: (s) => (s.user && s.user.tenant_name) || null,
     hasAISettings: (s) => !!(s.user && s.user.has_ai_settings),
+    aiProvider: (s) => (s.user && s.user.provider) || null,
     defaultTemplateId: (s) => (s.user && s.user.default_resume_template_id) || 'jake',
     initials: (s) => {
       if (!s.user || !s.user.name) return '?';
@@ -216,6 +217,7 @@ const useAuthStore = defineStore('auth', {
       if (!this.user) return;
       this.user.has_ai_settings = !!payload.has_ai_settings;
       this.user.selected_model = payload.selected_model || null;
+      this.user.provider = payload.provider || null;
     },
     setDefaultTemplate(templateId) {
       if (!this.user) return;
@@ -519,11 +521,17 @@ const useRoastStore = defineStore('roast', {
 const useAISettingsStore = defineStore('aiSettings', {
   state: () => ({
     hasAISettings: false,
+    provider: null,
     selectedModel: null,
+    baseUrl: null,
+    reasoningEffort: null,
     maskedApiKey: null,
     apiKeyLast4: null,
     validatedAt: null,
     allowedModels: [],
+    discoveredModels: [],
+    discovering: false,
+    discoverError: null,
     loading: false,
     saving: false,
     error: null,
@@ -531,7 +539,10 @@ const useAISettingsStore = defineStore('aiSettings', {
   actions: {
     _apply(data) {
       this.hasAISettings = !!data.has_ai_settings;
+      this.provider = data.provider || null;
       this.selectedModel = data.selected_model || null;
+      this.baseUrl = data.base_url || null;
+      this.reasoningEffort = data.reasoning_effort || null;
       this.maskedApiKey = data.masked_api_key || null;
       this.apiKeyLast4 = data.api_key_last4 || null;
       this.validatedAt = data.validated_at || null;
@@ -577,6 +588,22 @@ const useAISettingsStore = defineStore('aiSettings', {
         throw e;
       } finally {
         this.saving = false;
+      }
+    },
+    async discoverModels(baseUrl, apiKey) {
+      this.discovering = true;
+      this.discoverError = null;
+      try {
+        const data = await api.post('/auth/ai-settings/models', { base_url: baseUrl, api_key: apiKey || null });
+        this.discoveredModels = data.models || [];
+        this.discoverError = data.error || (this.discoveredModels.length ? null : 'No models returned by the endpoint.');
+        return data;
+      } catch (e) {
+        this.discoveredModels = [];
+        this.discoverError = e.message || 'Model discovery failed.';
+        throw e;
+      } finally {
+        this.discovering = false;
       }
     },
   },
@@ -835,7 +862,7 @@ const AppSidebar = {
             <div class="text-[11px] truncate" style="color:var(--text-dim)">{{ auth.user.email }}</div>
             <div v-if="auth.tenantName" class="text-[10px] truncate font-mono" style="color:var(--teal)">{{ auth.tenantName }}</div>
             <div class="text-[10px] truncate font-mono" :style="{ color: auth.hasAISettings ? 'var(--green)' : 'var(--orange)' }">
-              {{ auth.hasAISettings ? ('Gemini: ' + (auth.user.selected_model || 'configured')) : 'Gemini setup required' }}
+              {{ auth.hasAISettings ? ((auth.aiProvider === 'openai_compatible' ? 'AI: ' : 'Gemini: ') + (auth.user.selected_model || 'configured')) : 'AI setup required' }}
             </div>
           </div>
           <button @click="doLogout" class="text-slate-500 hover:text-red-400 transition" title="Logout">
@@ -1235,8 +1262,8 @@ const ProfileUploadPage = {
           <div v-else-if="!auth.hasAISettings && !uploading && !uploadResult" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
             <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
               <div>
-                <p class="text-white font-semibold mb-1">Gemini setup required</p>
-                <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before uploading a resume for AI structuring.</p>
+                <p class="text-white font-semibold mb-1">AI setup required</p>
+                <p class="text-xs" style="color:var(--text-dim)">Configure your AI provider and model in Settings before uploading a resume for AI structuring.</p>
               </div>
               <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
             </div>
@@ -2299,8 +2326,8 @@ const JobCreatePage = {
             <div v-if="!auth.hasAISettings" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
               <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
                 <div>
-                  <p class="text-white font-semibold mb-1">Gemini setup required</p>
-                  <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before generating tailored resumes.</p>
+                  <p class="text-white font-semibold mb-1">AI setup required</p>
+                  <p class="text-xs" style="color:var(--text-dim)">Configure your AI provider and model in Settings before generating tailored resumes.</p>
                 </div>
                 <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
               </div>
@@ -2826,8 +2853,8 @@ const JobDetailPage = {
           <div v-if="!auth.hasAISettings && (jobStore.current.status === 'PENDING' || (jobStore.current.status === 'FAILED' && !failedInPhase2))" class="widget-card p-6 mb-6 fade-slide-in" style="border-left:3px solid var(--orange);">
             <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
               <div>
-                <p class="text-white font-semibold mb-1">Gemini setup required</p>
-                <p class="text-xs" style="color:var(--text-dim)">This job record exists, but AI generation is blocked until you add your Gemini API key and model in Settings.</p>
+                <p class="text-white font-semibold mb-1">AI setup required</p>
+                <p class="text-xs" style="color:var(--text-dim)">This job record exists, but AI generation is blocked until you configure your AI provider and model in Settings.</p>
               </div>
               <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
             </div>
@@ -3311,13 +3338,14 @@ const AdminPage = {
                 <div class="overflow-x-auto scroll-hint">
                   <table class="data-table admin-table">
                     <thead><tr>
-                      <th>Model</th><th>Requests</th><th>Input</th><th>Output</th>
+                      <th>Provider</th><th>Model</th><th>Requests</th><th>Input</th><th>Output</th>
                       <th class="hidden md:table-cell">Cached</th>
                       <th class="hidden md:table-cell">Avg ms</th>
                       <th>Est. Cost</th>
                     </tr></thead>
                     <tbody>
-                      <tr v-for="m in overview.llm_summary.by_model" :key="m.model_name">
+                      <tr v-for="m in overview.llm_summary.by_model" :key="(m.provider || 'gemini') + '-' + m.model_name">
+                        <td class="font-mono text-[11px]" style="color:var(--text-dim)">{{ m.provider === 'openai_compatible' ? 'OpenAI' : 'Gemini' }}</td>
                         <td class="font-mono text-white text-[11px]">{{ m.model_name }}</td>
                         <td class="font-mono">{{ m.request_count }}</td>
                         <td class="font-mono">{{ formatTokens(m.input_tokens) }}</td>
@@ -3328,7 +3356,7 @@ const AdminPage = {
                       </tr>
                     </tbody>
                     <tfoot>
-                      <tr><td colspan="6" class="text-right font-mono text-[10px]" style="color:var(--text-dim)">TOTAL EST. COST</td>
+                      <tr><td colspan="7" class="text-right font-mono text-[10px]" style="color:var(--text-dim)">TOTAL EST. COST</td>
                         <td class="font-mono font-bold" style="color:var(--orange)">\${{ overview.llm_summary.total_estimated_cost_usd.toFixed(3) }}</td>
                       </tr>
                     </tfoot>
@@ -3695,8 +3723,8 @@ const RoastPage = {
             <div v-if="!auth.hasAISettings" class="widget-card p-6 mb-6" style="border-left:3px solid var(--orange);">
               <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
                 <div>
-                  <p class="text-white font-semibold mb-1">Gemini setup required</p>
-                  <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and choose a model in Settings before running AI roast analysis.</p>
+                  <p class="text-white font-semibold mb-1">AI setup required</p>
+                  <p class="text-xs" style="color:var(--text-dim)">Configure your AI provider and model in Settings before running AI roast analysis.</p>
                 </div>
                 <router-link to="/settings" class="btn-primary text-xs whitespace-nowrap">OPEN SETTINGS</router-link>
               </div>
@@ -4258,7 +4286,7 @@ const SettingsPage = {
         <template #left>
           <div>
             <h1 class="text-sm font-bold text-white font-mono tracking-tight">SETTINGS</h1>
-            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your Gemini API key, default model, and resume template</p>
+            <p class="text-[10px] font-mono hidden md:block" style="color:var(--text-dim)">Manage your AI provider, API key, model, and resume template</p>
           </div>
         </template>
       </TopHeader>
@@ -4267,15 +4295,15 @@ const SettingsPage = {
           <div class="widget-card p-6" :style="{ borderLeft: auth.hasAISettings ? '3px solid var(--green)' : '3px solid var(--orange)' }">
             <div class="flex items-start justify-between gap-4 flex-col md:flex-row">
               <div>
-                <p class="text-white font-semibold mb-1">{{ auth.hasAISettings ? 'Gemini is configured' : 'Gemini setup required' }}</p>
-                <p class="text-xs" style="color:var(--text-dim)">All AI-backed features in ATS Beater use your saved Gemini API key and the selected model below.</p>
+                <p class="text-white font-semibold mb-1">{{ auth.hasAISettings ? 'AI provider is configured' : 'AI setup required' }}</p>
+                <p class="text-xs" style="color:var(--text-dim)">All AI-backed features in ATS Beater use your saved provider credentials and the selected model below.</p>
               </div>
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn-ghost text-xs whitespace-nowrap">GET API KEY</a>
+              <a v-if="provider === 'gemini'" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn-ghost text-xs whitespace-nowrap">GET API KEY</a>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
               <div class="rounded-lg p-4" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
-                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Status</p>
-                <p class="text-sm font-semibold" :style="{ color: auth.hasAISettings ? 'var(--green)' : 'var(--orange)' }">{{ auth.hasAISettings ? 'Configured' : 'Not configured' }}</p>
+                <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Provider</p>
+                <p class="text-sm font-semibold" :style="{ color: auth.hasAISettings ? 'var(--green)' : 'var(--orange)' }">{{ auth.hasAISettings ? providerLabel(aiStore.provider) : 'Not configured' }}</p>
               </div>
               <div class="rounded-lg p-4" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
                 <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--text-dim)">Saved Key</p>
@@ -4289,13 +4317,24 @@ const SettingsPage = {
           </div>
 
           <div class="widget-card p-6">
-            <div class="section-label mb-4">Gemini Configuration</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="section-label mb-4">AI Configuration</div>
+            <div class="mb-4">
+              <label class="kpi-label block mb-1">Provider</label>
+              <select v-model="provider" class="input-field input-mono">
+                <option value="gemini">Gemini</option>
+                <option value="openai_compatible">OpenAI-compatible</option>
+              </select>
+              <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">
+                Choose which AI backend powers profile structuring, roast, tailoring, and chat.
+              </p>
+            </div>
+
+            <div v-if="provider === 'gemini'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="kpi-label block mb-1">Gemini API Key</label>
-                <input v-model="apiKey" type="password" class="input-field input-mono" :placeholder="aiStore.hasAISettings ? 'Leave blank to keep current key' : 'Paste your Gemini API key'" />
+                <input v-model="apiKey" type="password" class="input-field input-mono" :placeholder="keyPlaceholder" />
                 <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">
-                  {{ aiStore.hasAISettings ? 'Leave blank if you only want to change the model.' : 'Your key is encrypted at rest before it is stored.' }}
+                  {{ keyHint }}
                 </p>
               </div>
               <div>
@@ -4308,6 +4347,50 @@ const SettingsPage = {
                 </p>
               </div>
             </div>
+
+            <div v-else class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="kpi-label block mb-1">Base URL</label>
+                  <input v-model="baseUrl" type="text" class="input-field input-mono" placeholder="https://your-proxy.example.com/v1" />
+                  <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">OpenAI-compatible Chat Completions endpoint.</p>
+                </div>
+                <div>
+                  <label class="kpi-label block mb-1">API Key</label>
+                  <input v-model="apiKey" type="password" class="input-field input-mono" :placeholder="keyPlaceholder" />
+                  <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">{{ keyHint }}</p>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="kpi-label block mb-1">Model</label>
+                  <div class="flex gap-2">
+                    <input v-model="modelName" type="text" class="input-field input-mono" style="flex:1;" placeholder="e.g. qwen2.5-72b-instruct" list="oai-discovered-models" />
+                    <button type="button" @click="discoverModels" class="btn-ghost text-xs whitespace-nowrap" :disabled="aiStore.discovering || !baseUrl.trim()">
+                      <span v-if="aiStore.discovering" class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+                      {{ aiStore.discovering ? '...' : 'DISCOVER' }}
+                    </button>
+                  </div>
+                  <datalist id="oai-discovered-models">
+                    <option v-for="m in aiStore.discoveredModels" :key="'disc-'+m" :value="m"></option>
+                  </datalist>
+                  <p class="text-[10px] font-mono mt-2" :style="{ color: aiStore.discoverError ? 'var(--orange)' : 'var(--text-dim)' }">
+                    {{ aiStore.discoverError ? aiStore.discoverError : (aiStore.discoveredModels.length ? ('Discovered ' + aiStore.discoveredModels.length + ' model(s) — pick one or type your own.') : 'Enter a model ID, or click DISCOVER to fetch from the endpoint.') }}
+                  </p>
+                </div>
+                <div>
+                  <label class="kpi-label block mb-1">Reasoning Effort</label>
+                  <select v-model="reasoningEffort" class="input-field input-mono">
+                    <option value="">Default (omit)</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                  <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">Sent only when set to a non-default value.</p>
+                </div>
+              </div>
+            </div>
+
             <div class="rounded-lg p-4 mt-4" style="background:rgba(1,169,219,0.04);border:1px solid rgba(1,169,219,0.12);">
               <p class="text-[10px] font-mono font-bold tracking-widest uppercase mb-1" style="color:var(--teal)">Validation</p>
               <p class="text-xs" style="color:var(--text-dim)">
@@ -4350,7 +4433,7 @@ const SettingsPage = {
             </div>
           </div>
 
-          <div class="widget-card p-6">
+          <div v-if="provider === 'gemini'" class="widget-card p-6">
             <div class="section-label mb-4">Supported Models</div>
             <div class="space-y-2">
               <div v-for="model in aiStore.allowedModels" :key="'supported-'+model" class="rounded-lg px-4 py-3 font-mono text-xs text-white" style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.04);">
@@ -4368,14 +4451,35 @@ const SettingsPage = {
     const templateStore = useTemplateStore();
     const apiKey = ref('');
     const modelName = ref('');
+    const provider = ref('gemini');
+    const baseUrl = ref('');
+    const reasoningEffort = ref('');
     const defaultTemplateId = ref('jake');
     const message = ref('');
     const messageError = ref(false);
     const templateMessage = ref('');
     const templateMessageError = ref(false);
 
+    const providerLabel = (p) => (p === 'openai_compatible' ? 'OpenAI-compatible' : p === 'gemini' ? 'Gemini' : 'Not configured');
+
+    // Whether the saved key still applies: only when configured for the same provider.
+    const keyRequired = computed(() => !aiStore.hasAISettings || aiStore.provider !== provider.value);
+    const keyPlaceholder = computed(() => keyRequired.value
+      ? (provider.value === 'gemini' ? 'Paste your Gemini API key' : 'Paste your API key')
+      : 'Leave blank to keep current key');
+    const keyHint = computed(() => keyRequired.value
+      ? 'Your key is encrypted at rest before it is stored.'
+      : 'Leave blank if you only want to change other fields.');
+
     const syncForm = () => {
-      modelName.value = aiStore.selectedModel || aiStore.allowedModels[0] || '';
+      provider.value = aiStore.provider || 'gemini';
+      baseUrl.value = aiStore.baseUrl || '';
+      reasoningEffort.value = aiStore.reasoningEffort || '';
+      if (provider.value === 'gemini') {
+        modelName.value = aiStore.selectedModel || aiStore.allowedModels[0] || '';
+      } else {
+        modelName.value = aiStore.selectedModel || '';
+      }
       defaultTemplateId.value = auth.defaultTemplateId || templateStore.defaultTemplateId || 'jake';
     };
 
@@ -4394,24 +4498,30 @@ const SettingsPage = {
     });
 
     const saveDisabled = computed(() => {
-      if (!modelName.value) return true;
-      if (!aiStore.hasAISettings) return !apiKey.value.trim();
-      return !apiKey.value.trim() && modelName.value === aiStore.selectedModel;
+      if (aiStore.saving) return true;
+      if (!modelName.value.trim()) return true;
+      if (provider.value === 'openai_compatible' && !baseUrl.value.trim()) return true;
+      if (keyRequired.value && !apiKey.value.trim()) return true;
+      return false;
     });
 
     const saveSettings = async () => {
       message.value = '';
       messageError.value = false;
-      const payload = {};
+      const payload = { provider: provider.value };
       if (apiKey.value.trim()) payload.api_key = apiKey.value.trim();
-      if (modelName.value) payload.model_name = modelName.value;
+      if (modelName.value.trim()) payload.model_name = modelName.value.trim();
+      if (provider.value === 'openai_compatible') {
+        payload.base_url = baseUrl.value.trim();
+        payload.reasoning_effort = reasoningEffort.value || null;
+      }
       try {
         const result = await aiStore.saveSettings(payload);
         await auth.fetchMe();
         auth.setAIStatus(result);
         apiKey.value = '';
         syncForm();
-        message.value = 'Gemini settings saved successfully.';
+        message.value = 'AI settings saved successfully.';
       } catch (e) {
         message.value = e.message;
         messageError.value = true;
@@ -4420,8 +4530,8 @@ const SettingsPage = {
 
     const removeSettings = async () => {
       const confirmed = await showConfirm({
-        title: 'Remove Gemini Key',
-        message: 'This removes your saved Gemini API key and disables AI features until you add a new one.',
+        title: 'Remove AI Key',
+        message: 'This removes your saved provider API key and disables AI features until you add a new one.',
         confirmLabel: 'REMOVE',
         variant: 'warning',
       });
@@ -4435,10 +4545,19 @@ const SettingsPage = {
         auth.setAIStatus(result);
         apiKey.value = '';
         syncForm();
-        message.value = 'Gemini settings removed.';
+        message.value = 'AI settings removed.';
       } catch (e) {
         message.value = e.message;
         messageError.value = true;
+      }
+    };
+
+    const discoverModels = async () => {
+      if (!baseUrl.value.trim()) return;
+      try {
+        await aiStore.discoverModels(baseUrl.value.trim(), apiKey.value.trim());
+      } catch (e) {
+        // store already captured discoverError for inline display
       }
     };
 
@@ -4456,7 +4575,7 @@ const SettingsPage = {
       }
     };
 
-    return { auth, aiStore, templateStore, apiKey, modelName, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, formatDate };
+    return { auth, aiStore, templateStore, apiKey, modelName, provider, baseUrl, reasoningEffort, providerLabel, keyPlaceholder, keyHint, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, discoverModels, formatDate };
   },
 };
 
@@ -4494,7 +4613,7 @@ const ChatPanel = {
       <div class="chat-input-area">
         <div v-if="!auth.hasAISettings" class="mb-3 p-3 rounded-lg" style="background:rgba(251,65,0,0.08);border:1px solid rgba(251,65,0,0.2);">
           <p class="text-[11px] font-mono font-bold mb-1" style="color:var(--orange)">GEMINI SETUP REQUIRED</p>
-          <p class="text-xs" style="color:var(--text-dim)">Add your Gemini API key and model in <router-link to="/settings" style="color:var(--teal)">Settings</router-link> to use chat editing.</p>
+          <p class="text-xs" style="color:var(--text-dim)">Configure your AI provider and model in <router-link to="/settings" style="color:var(--teal)">Settings</router-link> to use chat editing.</p>
         </div>
         <div v-if="auth.hasAISettings && !messages.length && !loadingHistory && !sending && !pendingResponse" style="margin-bottom:10px;">
           <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;letter-spacing:1.5px;color:var(--text-dim);margin-bottom:8px;">TRY ASKING</div>
@@ -4506,7 +4625,7 @@ const ChatPanel = {
           </div>
         </div>
         <div style="display:flex;gap:8px;">
-          <textarea v-model="input" @keydown.enter.exact.prevent="send" rows="1" class="input-field" style="flex:1;resize:none;min-height:38px;max-height:120px;overflow-y:auto;" :placeholder="auth.hasAISettings ? 'Ask about your resume...' : 'Configure Gemini in Settings to chat...'" @input="autoResize" :disabled="!auth.hasAISettings"></textarea>
+          <textarea v-model="input" @keydown.enter.exact.prevent="send" rows="1" class="input-field" style="flex:1;resize:none;min-height:38px;max-height:120px;overflow-y:auto;" :placeholder="auth.hasAISettings ? 'Ask about your resume...' : 'Configure your AI provider in Settings to chat...'" @input="autoResize" :disabled="!auth.hasAISettings"></textarea>
           <button @click="send" class="btn-primary text-xs" style="padding:8px 14px;" :disabled="!auth.hasAISettings || !input.trim() || sending || pendingResponse">SEND</button>
         </div>
         <div v-if="error" class="text-xs mt-2" style="color:var(--red);">{{ error }}</div>

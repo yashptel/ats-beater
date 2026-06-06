@@ -66,6 +66,100 @@ async def test_ai_settings_crud_flow(client):
 
 
 @pytest.mark.asyncio
+async def test_ai_settings_response_includes_provider(client):
+    resp = await client.get("/auth/ai-settings")
+    assert resp.status_code == 200
+    assert resp.json()["provider"] is None
+
+    with patch(
+        "app.api.auth.ai_settings_service.validate_configuration",
+        new=AsyncMock(return_value=None),
+    ):
+        save = await client.put(
+            "/auth/ai-settings",
+            json={"api_key": "test-api-key-9999", "model_name": "gemini-3-flash-preview"},
+        )
+    assert save.status_code == 200
+    assert save.json()["provider"] == "gemini"
+
+    me = await client.get("/auth/me")
+    assert me.status_code == 200
+    assert me.json()["provider"] == "gemini"
+
+
+@pytest.mark.asyncio
+async def test_save_openai_compatible_settings(client):
+    with patch(
+        "app.api.auth.ai_settings_service.validate_configuration",
+        new=AsyncMock(return_value=None),
+    ):
+        resp = await client.put(
+            "/auth/ai-settings",
+            json={
+                "provider": "openai_compatible",
+                "api_key": "sk-proxy-9999",
+                "model_name": "qwen2.5-72b-instruct",
+                "base_url": "https://proxy.example.com/v1",
+                "reasoning_effort": "medium",
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] == "openai_compatible"
+    assert data["base_url"] == "https://proxy.example.com/v1"
+    assert data["selected_model"] == "qwen2.5-72b-instruct"
+    assert data["reasoning_effort"] == "medium"
+    assert data["api_key_last4"] == "9999"
+
+    me = await client.get("/auth/me")
+    assert me.json()["provider"] == "openai_compatible"
+
+
+@pytest.mark.asyncio
+async def test_discover_models_success(client):
+    with patch(
+        "app.api.auth.ai_settings_service.list_openai_models",
+        new=AsyncMock(return_value=["qwen-max", "qwen-plus"]),
+    ):
+        resp = await client.post(
+            "/auth/ai-settings/models",
+            json={"base_url": "https://proxy.example.com/v1", "api_key": "sk-1"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["models"] == ["qwen-max", "qwen-plus"]
+    assert body["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_discover_models_failure_returns_error_not_500(client):
+    with patch(
+        "app.api.auth.ai_settings_service.list_openai_models",
+        new=AsyncMock(side_effect=Exception("connection refused")),
+    ):
+        resp = await client.post(
+            "/auth/ai-settings/models",
+            json={"base_url": "https://proxy.example.com/v1", "api_key": "sk-1"},
+        )
+    # Failure must not 500 — it returns an inline error so manual entry still works.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["models"] == []
+    assert body["error"]
+
+
+@pytest.mark.asyncio
+async def test_discover_models_requires_api_key(client):
+    resp = await client.post(
+        "/auth/ai-settings/models",
+        json={"base_url": "https://proxy.example.com/v1"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["models"] == []
+    assert resp.json()["error"]
+
+
+@pytest.mark.asyncio
 async def test_ai_settings_rejects_unsupported_model(client):
     response = await client.put(
         "/auth/ai-settings",

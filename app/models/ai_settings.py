@@ -12,9 +12,14 @@ class UserAISettings(TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
+    provider: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="gemini", default="gemini"
+    )
     encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)
     api_key_last4: Mapped[str] = mapped_column(String(4), nullable=False)
     model_name: Mapped[str] = mapped_column(String, nullable=False)
+    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    reasoning_effort: Mapped[str | None] = mapped_column(String, nullable=True)
     validated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

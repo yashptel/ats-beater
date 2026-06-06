@@ -10,9 +10,45 @@ from pydantic import ValidationError
 
 from app.schemas.custom_resume import CustomResumeInfo
 from app.services.ai.inference import _log_request
+from app.services.ai.user_settings import (
+    PROVIDER_OPENAI,
+    local_endpoints_allowed,
+    validate_base_url,
+)
 from app.services.chat.history import load_history
+from app.services.chat.openai_chat import stream_tool_chat, to_openai_tools
 
 logger = getLogger(__name__)
+
+OPENAI_CHAT_TOOLS = to_openai_tools(
+    [
+        {
+            "name": "get_resume",
+            "description": "Read the current tailored resume before editing it.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "edit_resume",
+            "description": (
+                "Apply JSON Patch operations to the current resume. "
+                "Pass operations_json as a JSON array string."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operations_json": {
+                        "type": "string",
+                        "description": (
+                            "A JSON string containing an array of RFC 6902 patch operations. "
+                            "Example: [{\"op\":\"replace\",\"path\":\"/achievements/0\",\"value\":\"New text\"}]"
+                        ),
+                    }
+                },
+                "required": ["operations_json"],
+            },
+        },
+    ]
+)
 
 
 def get_resume(resume: dict) -> dict:
@@ -337,6 +373,26 @@ class ChatService:
             return None
         return getattr(candidates[0], "content", None)
 
+    def _execute_tool(self, name: str, args: dict, resume_state: dict):
+        """Run a chat tool with resume validation. Shared by both provider loops.
+
+        Returns (result, new_state, modified)."""
+        if name == "get_resume":
+            return get_resume(resume_state), resume_state, False
+        if name == "edit_resume":
+            result, updated = edit_resume(args or {}, resume_state)
+            if result.get("status") == "success":
+                return result, updated, True
+            return result, resume_state, False
+        return {"status": "error", "message": "Unknown tool"}, resume_state, False
+
+    def _make_openai_client(self, ai_settings):
+        from openai import AsyncOpenAI
+
+        return AsyncOpenAI(
+            api_key=ai_settings.api_key, base_url=ai_settings.base_url, timeout=60.0
+        )
+
     async def _generate_content(
         self,
         *,
@@ -368,6 +424,7 @@ class ChatService:
                 response_time_ms=elapsed_ms,
                 success=False,
                 error_message=str(exc)[:500],
+                provider="gemini",
             )
             raise
 
@@ -385,6 +442,7 @@ class ChatService:
             response_time_ms=elapsed_ms,
             success=True,
             error_message=None,
+            provider="gemini",
         )
         return response
 
@@ -397,12 +455,35 @@ class ChatService:
         profile_info: dict,
         current_resume: dict,
         *,
-        api_key: str,
-        model_name: str,
+        ai_settings,
     ) -> AsyncGenerator[dict, None]:
         system_prompt = self._build_system_prompt(job_description, profile_info)
+
+        if ai_settings.provider == PROVIDER_OPENAI:
+            validate_base_url(ai_settings.base_url or "", allow_local=local_endpoints_allowed())
+            client = self._make_openai_client(ai_settings)
+            async for event in stream_tool_chat(
+                client=client,
+                model=ai_settings.model_name,
+                system_prompt=system_prompt,
+                message=message,
+                tools=OPENAI_CHAT_TOOLS,
+                tool_labels=self._TOOL_LABELS,
+                execute_tool=self._execute_tool,
+                initial_state=current_resume,
+                state_key="custom_resume_data",
+                reasoning_effort=ai_settings.reasoning_effort,
+                user_id=user_id,
+                purpose="resume_chat_edit",
+                reference_id=str(job_id),
+                fallback_message="I couldn't complete that edit cleanly. Please try a more specific request.",
+            ):
+                yield event
+            return
+
+        model_name = ai_settings.model_name
         config = self._build_config(system_prompt)
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=ai_settings.api_key)
 
         contents: list[types.Content] = [
             types.Content(role="user", parts=[types.Part.from_text(text=message)])

@@ -109,8 +109,7 @@ async def chat_with_profile(
                         user_id=_user_id,
                         message=_message,
                         current_profile=_current_profile,
-                        api_key=ai_settings.api_key,
-                        model_name=ai_settings.model_name,
+                        ai_settings=ai_settings,
                     ):
                         if event_data.get("type") == "tool_call":
                             await append_tool_call(

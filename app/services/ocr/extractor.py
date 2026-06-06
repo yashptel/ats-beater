@@ -3,7 +3,7 @@ import base64
 from io import BytesIO
 import pdfplumber
 from pdf2image import convert_from_bytes
-from app.services.ai.inference import GeminiInference
+from app.services.ai.provider import build_inference
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT
 from app.schemas.resume import ResumeInfo
 from logging import getLogger
@@ -27,13 +27,13 @@ class PDFExtractor:
         self,
         pdf_bytes: bytes,
         *,
-        api_key: str,
-        model_name: str,
+        ai_settings,
         user_id: str | None = None,
         reference_id: str | None = None,
     ) -> dict:
         """Convert PDF to images and send ALL pages + structuring prompt in a single
-        Gemini call. Returns a ResumeInfo dict directly (no separate structuring step).
+        call through the user's active provider. Returns a ResumeInfo dict directly
+        (no separate structuring step).
         """
         pages = await asyncio.to_thread(convert_from_bytes, pdf_bytes, dpi=200)
         images = []
@@ -43,7 +43,7 @@ class PDFExtractor:
             b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
             images.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
 
-        llm = GeminiInference(api_key=api_key, model_name=model_name)
+        llm = build_inference(ai_settings)
         result = await llm.run_inference(
             system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
             inputs=[

@@ -8,15 +8,20 @@ from app.config import get_settings
 from app.models.user import User
 from app.models.ai_settings import UserAISettings
 from app.models.tenant import Tenant, TenantDomainRule
-from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdateRequest
+from app.schemas.ai_settings import (
+    AISettingsResponse,
+    AISettingsUpdateRequest,
+    ModelDiscoveryRequest,
+    ModelDiscoveryResponse,
+)
 from app.schemas.templates import UserPreferencesResponse, UserPreferencesUpdateRequest
 from app.services.auth import google_oauth
-from app.services.ai.user_settings import AISettingsService
+from app.services.ai.user_settings import AISettingsService, PROVIDER_OPENAI
 from app.services.latex.templates import normalize_template_id
 from typing import Optional
 from app.services.auth.jwt_handler import create_access_token, decode_expired_token
 from app.dependencies import get_current_user
-from app.exceptions import AuthenticationError
+from app.exceptions import AuthenticationError, InvalidAISettingsError
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -147,6 +152,7 @@ async def get_me(
         "tenant_id": current_user.tenant_id,
         "tenant_name": tenant_name,
         "has_ai_settings": ai_settings is not None,
+        "provider": ai_settings.provider if ai_settings else None,
         "selected_model": ai_settings.model_name if ai_settings else None,
         "default_resume_template_id": normalize_template_id(
             current_user.default_resume_template_id
@@ -172,8 +178,11 @@ async def upsert_ai_settings(
     ai_settings = await ai_settings_service.upsert_settings(
         db,
         current_user.id,
+        provider=payload.provider,
         api_key=payload.api_key.strip() if payload.api_key else None,
         model_name=payload.model_name,
+        base_url=payload.base_url.strip() if payload.base_url else None,
+        reasoning_effort=payload.reasoning_effort,
     )
     return ai_settings_service.serialize(ai_settings)
 
@@ -185,6 +194,37 @@ async def delete_ai_settings(
 ):
     await ai_settings_service.delete_settings(db, current_user.id)
     return ai_settings_service.serialize(None)
+
+
+@router.post("/ai-settings/models", response_model=ModelDiscoveryResponse)
+async def discover_ai_models(
+    payload: ModelDiscoveryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch model IDs from an OpenAI-compatible endpoint. Convenience only:
+    failures return an inline error so the user can still enter a model ID."""
+    api_key = payload.api_key.strip() if payload.api_key else None
+    if not api_key:
+        existing = await ai_settings_service.get_settings(db, current_user.id)
+        if existing and existing.provider == PROVIDER_OPENAI:
+            api_key = ai_settings_service.decrypt_api_key(existing.encrypted_api_key)
+    if not api_key:
+        return {"models": [], "error": "Enter an API key to discover models."}
+
+    try:
+        models = await ai_settings_service.list_openai_models(
+            api_key=api_key, base_url=payload.base_url.strip()
+        )
+        return {"models": models, "error": None}
+    except InvalidAISettingsError as exc:
+        return {"models": [], "error": str(exc)}
+    except Exception:
+        logger.info("OpenAI-compatible model discovery failed", exc_info=True)
+        return {
+            "models": [],
+            "error": "Could not fetch models from the endpoint. Check the base URL and API key, or enter a model ID manually.",
+        }
 
 
 @router.put("/preferences", response_model=UserPreferencesResponse)

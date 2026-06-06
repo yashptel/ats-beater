@@ -14,7 +14,7 @@ from pdf2image import convert_from_bytes
 from app.exceptions import RoastNotFoundError
 from app.models.roast import Roast, RoastStatus
 from app.schemas.roast import RoastResult
-from app.services.ai.inference import GeminiInference
+from app.services.ai.provider import build_inference
 from app.services.ai.prompts import ROAST_SYSTEM_PROMPT
 from app.services.ocr.extractor import PDFExtractor
 from app.services.ai.user_settings import AISettingsService
@@ -98,10 +98,7 @@ class RoastService:
             ai_settings = await self.ai_settings_service.resolve_for_user(
                 db, roast.user_id
             )
-            llm: GeminiInference = GeminiInference(
-                api_key=ai_settings.api_key,
-                model_name=ai_settings.model_name,
-            )
+            llm = build_inference(ai_settings)
 
             user_message_parts: list[Any] = [
                 f"Today's date is {now}. Here is the resume to roast. Examine each page — look at both the content AND the formatting/layout.",

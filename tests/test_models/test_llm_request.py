@@ -100,3 +100,31 @@ async def test_llm_request_defaults(db_session, test_user):
     assert row.response_time_ms == 0
     assert row.success is True
     assert row.error_message is None
+
+
+@pytest.mark.asyncio
+async def test_llm_request_defaults_provider_to_gemini(db_session, test_user):
+    """Mirrors the migration default — existing logged rows read as Gemini."""
+    row = LLMRequest(
+        user_id=test_user.id,
+        purpose="resume_tailoring",
+        model_name="gemini-3-flash-preview",
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row)
+    assert row.provider == "gemini"
+
+
+@pytest.mark.asyncio
+async def test_llm_request_records_openai_provider(db_session, test_user):
+    row = LLMRequest(
+        user_id=test_user.id,
+        purpose="resume_tailoring",
+        model_name="qwen-max",
+        provider="openai_compatible",
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row)
+    assert row.provider == "openai_compatible"
