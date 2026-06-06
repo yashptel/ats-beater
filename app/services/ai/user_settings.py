@@ -201,6 +201,30 @@ class AISettingsService:
         else:
             raise InvalidAISettingsError("Unsupported AI provider.")
 
+    async def list_openai_models(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        allow_local: bool | None = None,
+    ) -> list[str]:
+        """Discover model IDs from an OpenAI-compatible endpoint's /models route.
+
+        Convenience only — discovery failures must not block manual model entry,
+        and the save-time Chat Completions validation remains authoritative.
+        """
+        if allow_local is None:
+            allow_local = self._allow_local_endpoints()
+        validate_base_url(base_url or "", allow_local=allow_local)
+        client = self._openai_client(api_key, base_url)
+        result = await client.models.list()
+        models: list[str] = []
+        for item in getattr(result, "data", None) or []:
+            model_id = getattr(item, "id", None)
+            if model_id:
+                models.append(model_id)
+        return sorted(set(models))
+
     async def _validate_gemini(self, api_key: str, model_name: str) -> None:
         self.ensure_allowed_model(model_name)
         try:

@@ -529,6 +529,9 @@ const useAISettingsStore = defineStore('aiSettings', {
     apiKeyLast4: null,
     validatedAt: null,
     allowedModels: [],
+    discoveredModels: [],
+    discovering: false,
+    discoverError: null,
     loading: false,
     saving: false,
     error: null,
@@ -585,6 +588,22 @@ const useAISettingsStore = defineStore('aiSettings', {
         throw e;
       } finally {
         this.saving = false;
+      }
+    },
+    async discoverModels(baseUrl, apiKey) {
+      this.discovering = true;
+      this.discoverError = null;
+      try {
+        const data = await api.post('/auth/ai-settings/models', { base_url: baseUrl, api_key: apiKey || null });
+        this.discoveredModels = data.models || [];
+        this.discoverError = data.error || (this.discoveredModels.length ? null : 'No models returned by the endpoint.');
+        return data;
+      } catch (e) {
+        this.discoveredModels = [];
+        this.discoverError = e.message || 'Model discovery failed.';
+        throw e;
+      } finally {
+        this.discovering = false;
       }
     },
   },
@@ -4344,8 +4363,19 @@ const SettingsPage = {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="kpi-label block mb-1">Model</label>
-                  <input v-model="modelName" type="text" class="input-field input-mono" placeholder="e.g. qwen2.5-72b-instruct" />
-                  <p class="text-[10px] font-mono mt-2" style="color:var(--text-dim)">Enter the model ID your endpoint exposes.</p>
+                  <div class="flex gap-2">
+                    <input v-model="modelName" type="text" class="input-field input-mono" style="flex:1;" placeholder="e.g. qwen2.5-72b-instruct" list="oai-discovered-models" />
+                    <button type="button" @click="discoverModels" class="btn-ghost text-xs whitespace-nowrap" :disabled="aiStore.discovering || !baseUrl.trim()">
+                      <span v-if="aiStore.discovering" class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+                      {{ aiStore.discovering ? '...' : 'DISCOVER' }}
+                    </button>
+                  </div>
+                  <datalist id="oai-discovered-models">
+                    <option v-for="m in aiStore.discoveredModels" :key="'disc-'+m" :value="m"></option>
+                  </datalist>
+                  <p class="text-[10px] font-mono mt-2" :style="{ color: aiStore.discoverError ? 'var(--orange)' : 'var(--text-dim)' }">
+                    {{ aiStore.discoverError ? aiStore.discoverError : (aiStore.discoveredModels.length ? ('Discovered ' + aiStore.discoveredModels.length + ' model(s) — pick one or type your own.') : 'Enter a model ID, or click DISCOVER to fetch from the endpoint.') }}
+                  </p>
                 </div>
                 <div>
                   <label class="kpi-label block mb-1">Reasoning Effort</label>
@@ -4521,6 +4551,15 @@ const SettingsPage = {
       }
     };
 
+    const discoverModels = async () => {
+      if (!baseUrl.value.trim()) return;
+      try {
+        await aiStore.discoverModels(baseUrl.value.trim(), apiKey.value.trim());
+      } catch (e) {
+        // store already captured discoverError for inline display
+      }
+    };
+
     const saveDefaultTemplate = async () => {
       templateMessage.value = '';
       templateMessageError.value = false;
@@ -4535,7 +4574,7 @@ const SettingsPage = {
       }
     };
 
-    return { auth, aiStore, templateStore, apiKey, modelName, provider, baseUrl, reasoningEffort, providerLabel, keyPlaceholder, keyHint, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, formatDate };
+    return { auth, aiStore, templateStore, apiKey, modelName, provider, baseUrl, reasoningEffort, providerLabel, keyPlaceholder, keyHint, defaultTemplateId, message, messageError, templateMessage, templateMessageError, saveDisabled, saveSettings, saveDefaultTemplate, removeSettings, discoverModels, formatDate };
   },
 };
 

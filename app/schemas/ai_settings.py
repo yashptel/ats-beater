@@ -17,6 +17,16 @@ class AISettingsUpdateRequest(BaseModel):
         return self
 
 
+class ModelDiscoveryRequest(BaseModel):
+    base_url: str
+    api_key: str | None = None
+
+
+class ModelDiscoveryResponse(BaseModel):
+    models: list[str]
+    error: str | None = None
+
+
 class AISettingsResponse(BaseModel):
     has_ai_settings: bool
     provider: str | None = None

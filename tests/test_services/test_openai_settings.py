@@ -95,6 +95,32 @@ async def test_validate_openai_includes_reasoning_effort_when_set(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_openai_models_returns_ids(monkeypatch):
+    service = AISettingsService()
+    fake = MagicMock()
+    fake.models.list = AsyncMock(
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(id="qwen-plus"), SimpleNamespace(id="qwen-max"), SimpleNamespace(id="qwen-max")]
+        )
+    )
+    monkeypatch.setattr(service, "_openai_client", lambda api_key, base_url: fake)
+
+    models = await service.list_openai_models(
+        api_key="k", base_url="https://proxy.example.com/v1", allow_local=True
+    )
+    assert models == ["qwen-max", "qwen-plus"]  # deduped + sorted
+
+
+@pytest.mark.asyncio
+async def test_list_openai_models_ssrf_rejected():
+    service = AISettingsService()
+    with pytest.raises(InvalidAISettingsError):
+        await service.list_openai_models(
+            api_key="k", base_url="https://127.0.0.1/v1", allow_local=False
+        )
+
+
+@pytest.mark.asyncio
 async def test_upsert_openai_compatible_persists_config(db_session, test_user, monkeypatch):
     service = AISettingsService()
     monkeypatch.setattr(service, "validate_configuration", AsyncMock(return_value=None))
