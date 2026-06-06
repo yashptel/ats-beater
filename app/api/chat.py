@@ -123,8 +123,7 @@ async def chat_with_job(
                         job_description=_job_description,
                         profile_info=_profile_info,
                         current_resume=_current_resume,
-                        api_key=ai_settings.api_key,
-                        model_name=ai_settings.model_name,
+                        ai_settings=ai_settings,
                     ):
                         if event_data.get("type") == "tool_call":
                             await append_tool_call(

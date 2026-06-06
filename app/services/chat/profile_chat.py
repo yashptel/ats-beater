@@ -10,9 +10,45 @@ from pydantic import ValidationError
 
 from app.schemas.resume import ResumeInfo
 from app.services.ai.inference import _log_request
+from app.services.ai.user_settings import (
+    PROVIDER_OPENAI,
+    local_endpoints_allowed,
+    validate_base_url,
+)
 from app.services.chat.history import load_history
+from app.services.chat.openai_chat import stream_tool_chat, to_openai_tools
 
 logger = getLogger(__name__)
+
+OPENAI_PROFILE_CHAT_TOOLS = to_openai_tools(
+    [
+        {
+            "name": "get_profile",
+            "description": "Read the current profile before editing it.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "edit_profile",
+            "description": (
+                "Apply JSON Patch operations to the current profile. "
+                "Pass operations_json as a JSON array string."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operations_json": {
+                        "type": "string",
+                        "description": (
+                            "A JSON string containing an array of RFC 6902 patch operations. "
+                            "Example: [{\"op\":\"replace\",\"path\":\"/skills/0/name\",\"value\":\"Python\"}]"
+                        ),
+                    }
+                },
+                "required": ["operations_json"],
+            },
+        },
+    ]
+)
 
 
 def get_profile(profile: dict) -> dict:
@@ -222,6 +258,24 @@ class ProfileChatService:
             return None
         return getattr(candidates[0], "content", None)
 
+    def _execute_tool(self, name: str, args: dict, profile_state: dict):
+        """Run a profile chat tool with validation. Returns (result, new_state, modified)."""
+        if name == "get_profile":
+            return get_profile(profile_state), profile_state, False
+        if name == "edit_profile":
+            result, updated = edit_profile(args or {}, profile_state)
+            if result.get("status") == "success":
+                return result, updated, True
+            return result, profile_state, False
+        return {"status": "error", "message": "Unknown tool"}, profile_state, False
+
+    def _make_openai_client(self, ai_settings):
+        from openai import AsyncOpenAI
+
+        return AsyncOpenAI(
+            api_key=ai_settings.api_key, base_url=ai_settings.base_url, timeout=60.0
+        )
+
     async def _generate_content(
         self,
         *,
@@ -280,11 +334,33 @@ class ProfileChatService:
         message: str,
         current_profile: dict,
         *,
-        api_key: str,
-        model_name: str,
+        ai_settings,
     ) -> AsyncGenerator[dict, None]:
+        if ai_settings.provider == PROVIDER_OPENAI:
+            validate_base_url(ai_settings.base_url or "", allow_local=local_endpoints_allowed())
+            client = self._make_openai_client(ai_settings)
+            async for event in stream_tool_chat(
+                client=client,
+                model=ai_settings.model_name,
+                system_prompt=PROFILE_CHAT_SYSTEM_PROMPT,
+                message=message,
+                tools=OPENAI_PROFILE_CHAT_TOOLS,
+                tool_labels=self._TOOL_LABELS,
+                execute_tool=self._execute_tool,
+                initial_state=current_profile,
+                state_key="resume_info",
+                reasoning_effort=ai_settings.reasoning_effort,
+                user_id=user_id,
+                purpose="profile_chat_edit",
+                reference_id=str(profile_id),
+                fallback_message="I couldn't complete that edit cleanly. Please try a more specific request.",
+            ):
+                yield event
+            return
+
+        model_name = ai_settings.model_name
         config = self._build_config()
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=ai_settings.api_key)
 
         contents: list[types.Content] = [
             types.Content(role="user", parts=[types.Part.from_text(text=message)])
