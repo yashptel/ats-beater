@@ -32,7 +32,11 @@ async def test_vision_extraction_routes_through_active_provider(monkeypatch):
         base_url="https://proxy.example.com/v1",
     )
     result = await ext.extract_and_structure_via_vision(
-        b"pdf-bytes", ai_settings=resolved, user_id="u", reference_id="1"
+        b"pdf-bytes",
+        ai_settings=resolved,
+        user_id="u",
+        reference_id="1",
+        extracted_text="pdfplumber text with bullet context",
     )
 
     assert result == {"name": "X"}
@@ -40,5 +44,9 @@ async def test_vision_extraction_routes_through_active_provider(monkeypatch):
     assert captured["resolved"] is resolved
     kwargs = fake_llm.run_inference.await_args.kwargs
     assert kwargs["purpose"] == "profile_structuring_vision"
+    assert any(
+        isinstance(i, str) and "pdfplumber text with bullet context" in i
+        for i in kwargs["inputs"]
+    )
     # Page images are still passed as inline-image dicts (provider adapts them).
     assert sum(1 for i in kwargs["inputs"] if isinstance(i, dict) and "inline_data" in i) == 2

@@ -32,6 +32,7 @@ class PDFExtractor:
         user_id: str | None = None,
         reference_id: str | None = None,
         primary_timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
+        extracted_text: str = "",
     ) -> dict:
         """Convert PDF to images and send ALL pages + structuring prompt in a single
         call through the user's active provider. Returns a ResumeInfo dict directly
@@ -46,12 +47,22 @@ class PDFExtractor:
             images.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
 
         llm = build_inference(ai_settings)
+        input_parts: list = [
+            "Extract and structure ALL information from these resume page images into the given JSON schema. Use the page images to recover visual section and bullet boundaries.",
+        ]
+        if extracted_text.strip():
+            input_parts.append(
+                "\n\n<pdf_text_extraction>\n"
+                f"{extracted_text}"
+                "\n</pdf_text_extraction>\n\n"
+                "The text above came from local PDF text extraction. Use it for exact wording, "
+                "but trust the page images when deciding where bullets and sections begin."
+            )
+        input_parts.extend(images)
+
         result = await llm.run_inference(
             system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
-            inputs=[
-                "Extract and structure ALL information from these resume page images into the given JSON schema.",
-                *images,
-            ],
+            inputs=input_parts,
             structured_output_schema=ResumeInfo,
             user_id=user_id,
             purpose="profile_structuring_vision",

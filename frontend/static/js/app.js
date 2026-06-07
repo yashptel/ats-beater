@@ -1725,7 +1725,7 @@ const ProfileDetailPage = {
               <div class="space-y-3 mt-4">
                 <div v-for="(proj, i) in info.projects" :key="i" class="p-3 rounded" style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.04);">
                   <h4 class="text-white font-semibold text-sm">{{ proj.name }}</h4>
-                  <p class="text-xs text-slate-400 mt-1" v-if="proj.description">{{ proj.description }}</p>
+                  <p class="text-xs text-slate-400 mt-1 whitespace-pre-line" v-if="proj.description">{{ proj.description }}</p>
                   <a v-if="proj.link" :href="proj.link" target="_blank" class="text-[10px] font-mono mt-1 inline-block" style="color:var(--teal);">{{ proj.link }}</a>
                 </div>
               </div>

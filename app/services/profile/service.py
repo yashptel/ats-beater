@@ -8,7 +8,7 @@ from app.schemas.resume import ResumeInfo
 from app.services.ocr.extractor import PDFExtractor
 from app.services.ai.provider import build_inference
 from app.services.ai.inference import PROFILE_STRUCTURING_TIMEOUT_SECONDS
-from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT, ENHANCED_RESUME_SYSTEM_PROMPT
+from app.services.ai.prompts import ENHANCED_RESUME_SYSTEM_PROMPT
 from app.services.ai.user_settings import AISettingsService
 from app.exceptions import ProfileNotFoundError
 from logging import getLogger
@@ -64,36 +64,19 @@ class ProfileService:
             else:
                 logger.info(f"[profile:{profile_id}] Using pre-extracted text ({len(text)} chars)")
 
-            needs_vision = len(text.strip()) < 50 or self.extractor._has_high_non_ascii_ratio(text)
-
             t0 = time.monotonic()
-            if needs_vision:
-                logger.info(f"[profile:{profile_id}] Using vision path (text_len={len(text.strip())}, high_non_ascii={self.extractor._has_high_non_ascii_ratio(text)})")
-                ai_settings = await self.ai_settings_service.resolve_for_user(
-                    db, profile.user_id
-                )
-                result = await self.extractor.extract_and_structure_via_vision(
-                    pdf_bytes,
-                    ai_settings=ai_settings,
-                    user_id=profile.user_id,
-                    reference_id=str(profile_id),
-                    primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
-                )
-            else:
-                logger.info(f"[profile:{profile_id}] Using text path → AI structuring")
-                ai_settings = await self.ai_settings_service.resolve_for_user(
-                    db, profile.user_id
-                )
-                llm = build_inference(ai_settings)
-                result = await llm.run_inference(
-                    system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
-                    inputs=[text],
-                    structured_output_schema=ResumeInfo,
-                    user_id=profile.user_id,
-                    purpose="profile_structuring",
-                    reference_id=str(profile_id),
-                    primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
-                )
+            logger.info(f"[profile:{profile_id}] Using text+image path → AI structuring")
+            ai_settings = await self.ai_settings_service.resolve_for_user(
+                db, profile.user_id
+            )
+            result = await self.extractor.extract_and_structure_via_vision(
+                pdf_bytes,
+                ai_settings=ai_settings,
+                user_id=profile.user_id,
+                reference_id=str(profile_id),
+                primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
+                extracted_text=text,
+            )
             ai_ms = int((time.monotonic() - t0) * 1000)
             logger.info(f"[profile:{profile_id}] AI structuring: {ai_ms}ms {'(SLOW >60s)' if ai_ms > 60000 else ''}")
 

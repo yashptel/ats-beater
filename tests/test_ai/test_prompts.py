@@ -55,6 +55,13 @@ def test_structured_resume_prompt_extracts_candidate_location():
     assert "top-level `location`" in text
 
 
+def test_structured_resume_prompt_requires_newline_delimited_bullets():
+    text = STRUCTURED_RESUME_SYSTEM_PROMPT.lower()
+    assert "newline-delimited" in text
+    assert "one bullet" in text
+    assert "bullet glyph" in text
+
+
 def test_custom_resume_prompt_includes_template_density_hint():
     rendered = CUSTOM_RESUME_USER_PROMPT.format(
         user_info=json.dumps({"name": "Test User", "email": "test@example.com"}),

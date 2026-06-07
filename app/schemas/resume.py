@@ -1,5 +1,40 @@
-from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+import re
+from typing import Any, List, Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+
+_BULLET_SEPARATOR_RE = re.compile(r"(?:^|\s)[\u2022\u00b7]\s*(?:[\u2022\u00b7]\s*)*")
+_LINE_BULLET_PREFIX_RE = re.compile(r"^\s*(?:[\u2022\u00b7\-–—*]\s*)+")
+
+
+def normalize_profile_description(value: Any) -> Any:
+    """Canonicalize source-profile descriptions without dropping content.
+
+    Profile descriptions stay strings, but bullets are represented as one clean
+    line per bullet. This prevents PDF extraction artifacts such as
+    "• · First. · Second." from leaking into downstream tailoring.
+    """
+    if not isinstance(value, str):
+        return value
+
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+    if "\u2022" in normalized or "\u00b7" in normalized:
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    lines: list[str] = []
+    for raw_line in normalized.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        parts = [part.strip() for part in _BULLET_SEPARATOR_RE.split(line)]
+        for part in parts:
+            cleaned = _LINE_BULLET_PREFIX_RE.sub("", part).strip()
+            if cleaned:
+                lines.append(cleaned)
+
+    return "\n".join(lines)
 
 
 class Link(BaseModel):
@@ -12,6 +47,11 @@ class Project(BaseModel):
     link: Optional[str] = Field(default=None, title="Link to the project")
     description: str = Field(title="Description of the project")
 
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, value: Any) -> Any:
+        return normalize_profile_description(value)
+
 
 class Experience(BaseModel):
     company_name: str = Field(..., title="Name of the company")
@@ -21,6 +61,11 @@ class Experience(BaseModel):
     end_date: Optional[str] = Field(default=None, title="End date of the experience")
     role: str = Field(..., title="Role in the company")
     description: str = Field(title="Full description of the experience preserving all details and achievements")
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, value: Any) -> Any:
+        return normalize_profile_description(value)
 
 
 class Achievement(BaseModel):
