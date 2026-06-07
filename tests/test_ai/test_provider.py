@@ -59,6 +59,13 @@ def test_openai_compatible_client_uses_neutral_user_agent():
     assert client.default_headers["User-Agent"] == OPENAI_COMPATIBLE_USER_AGENT
 
 
+def test_openai_compatible_client_disables_sdk_retries():
+    client = build_openai_compatible_client(
+        api_key="k", base_url="https://proxy.example.com/v1", timeout=20.0
+    )
+    assert client.max_retries == 0
+
+
 def test_structured_output_contract_includes_required_schema_fields():
     roast_contract = build_structured_output_contract(RoastResult)
     resume_contract = build_structured_output_contract(CustomResumeInfo)

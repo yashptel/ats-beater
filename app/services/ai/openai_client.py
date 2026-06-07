@@ -9,5 +9,6 @@ def build_openai_compatible_client(*, api_key: str, base_url: str, timeout: floa
         api_key=api_key,
         base_url=base_url,
         timeout=timeout,
+        max_retries=0,
         default_headers={"User-Agent": OPENAI_COMPATIBLE_USER_AGENT},
     )
