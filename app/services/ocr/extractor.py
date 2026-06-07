@@ -4,6 +4,7 @@ from io import BytesIO
 import pdfplumber
 from pdf2image import convert_from_bytes
 from app.services.ai.provider import build_inference
+from app.services.ai.inference import PRIMARY_TIMEOUT_SECONDS
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT
 from app.schemas.resume import ResumeInfo
 from logging import getLogger
@@ -30,6 +31,7 @@ class PDFExtractor:
         ai_settings,
         user_id: str | None = None,
         reference_id: str | None = None,
+        primary_timeout: int | None = PRIMARY_TIMEOUT_SECONDS,
     ) -> dict:
         """Convert PDF to images and send ALL pages + structuring prompt in a single
         call through the user's active provider. Returns a ResumeInfo dict directly
@@ -54,6 +56,7 @@ class PDFExtractor:
             user_id=user_id,
             purpose="profile_structuring_vision",
             reference_id=reference_id,
+            primary_timeout=primary_timeout,
         )
         return result
 

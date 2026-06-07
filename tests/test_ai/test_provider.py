@@ -171,6 +171,21 @@ async def test_openai_inference_omits_reasoning_effort_by_default():
     assert "extra_body" not in captured
 
 
+@pytest.mark.asyncio
+async def test_openai_inference_passes_per_call_timeout():
+    inf = _make_openai()
+    captured = {}
+
+    async def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _completion("ok")
+
+    inf.client = MagicMock()
+    inf.client.chat.completions.create = fake_create
+    await inf.run_inference(system_prompt="Hi", inputs=["hi"], primary_timeout=123)
+    assert captured["timeout"] == 123.0
+
+
 def test_openai_build_messages_text_only_uses_string_content():
     inf = _make_openai()
     messages = inf._build_messages("Sys", ["a", "b"])

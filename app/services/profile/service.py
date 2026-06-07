@@ -7,6 +7,7 @@ from app.models.profile import Profile, ProfileStatus
 from app.schemas.resume import ResumeInfo
 from app.services.ocr.extractor import PDFExtractor
 from app.services.ai.provider import build_inference
+from app.services.ai.inference import PROFILE_STRUCTURING_TIMEOUT_SECONDS
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT, ENHANCED_RESUME_SYSTEM_PROMPT
 from app.services.ai.user_settings import AISettingsService
 from app.exceptions import ProfileNotFoundError
@@ -76,6 +77,7 @@ class ProfileService:
                     ai_settings=ai_settings,
                     user_id=profile.user_id,
                     reference_id=str(profile_id),
+                    primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
                 )
             else:
                 logger.info(f"[profile:{profile_id}] Using text path → AI structuring")
@@ -90,6 +92,7 @@ class ProfileService:
                     user_id=profile.user_id,
                     purpose="profile_structuring",
                     reference_id=str(profile_id),
+                    primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
                 )
             ai_ms = int((time.monotonic() - t0) * 1000)
             logger.info(f"[profile:{profile_id}] AI structuring: {ai_ms}ms {'(SLOW >60s)' if ai_ms > 60000 else ''}")
@@ -160,6 +163,7 @@ class ProfileService:
             user_id=profile.user_id,
             purpose="profile_enhancement",
             reference_id=str(profile_id),
+            primary_timeout=PROFILE_STRUCTURING_TIMEOUT_SECONDS,
         )
         profile.resume_info = result
         await db.commit()

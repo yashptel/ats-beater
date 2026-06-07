@@ -10,6 +10,7 @@ from app.services.ai.openai_client import build_openai_compatible_client
 from app.services.ai.retry import retry_decor
 
 PRIMARY_TIMEOUT_SECONDS = 60
+PROFILE_STRUCTURING_TIMEOUT_SECONDS = 180
 
 logger = getLogger(__name__)
 MAX_STRUCTURED_OUTPUT_REPAIR_ATTEMPTS = 2
@@ -521,6 +522,7 @@ class OpenAICompatibleInference:
         *,
         structured: bool,
         temperature: float,
+        timeout: int | None,
         user_id: str | None,
         purpose: str | None,
         reference_id: str | None,
@@ -533,6 +535,8 @@ class OpenAICompatibleInference:
         }
         if structured:
             request_kwargs["response_format"] = {"type": "json_object"}
+        if timeout:
+            request_kwargs["timeout"] = float(timeout)
         if self.reasoning_effort:
             request_kwargs["extra_body"] = {"reasoning_effort": self.reasoning_effort}
 
@@ -598,6 +602,7 @@ class OpenAICompatibleInference:
                 messages,
                 structured=bool(structured_output_schema),
                 temperature=temperature,
+                timeout=primary_timeout,
                 user_id=user_id,
                 purpose=purpose,
                 reference_id=reference_id,
