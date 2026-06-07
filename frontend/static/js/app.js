@@ -128,6 +128,11 @@ function buildPdfFilename(candidateName, role, company, jobId) {
   return `resume_${jobId}.pdf`;
 }
 
+function descriptionLines(description) {
+  if (!description) return [];
+  return String(description).split(/\n+/).map(line => line.trim()).filter(Boolean);
+}
+
 function jobLabel(j) {
   const jd = j.job_description;
   if (jd && jd.role && jd.company) return `${jd.role} at ${jd.company}`;
@@ -1706,7 +1711,10 @@ const ProfileDetailPage = {
                     </div>
                     <span class="font-mono text-[10px] text-slate-500 flex-shrink-0">{{ [exp.start_date, exp.end_date || 'Present'].filter(Boolean).join(' — ') }}</span>
                   </div>
-                  <p v-if="exp.description" class="text-xs text-slate-400 mt-2 leading-relaxed whitespace-pre-line">{{ exp.description }}</p>
+                  <ul v-if="descriptionLines(exp.description).length > 1" class="list-disc pl-5 text-xs text-slate-400 mt-2 leading-relaxed space-y-1">
+                    <li v-for="(line, j) in descriptionLines(exp.description)" :key="j">{{ line }}</li>
+                  </ul>
+                  <p v-else-if="descriptionLines(exp.description).length === 1" class="text-xs text-slate-400 mt-2 leading-relaxed">{{ descriptionLines(exp.description)[0] }}</p>
                 </div>
               </div>
             </div>
@@ -1725,7 +1733,10 @@ const ProfileDetailPage = {
               <div class="space-y-3 mt-4">
                 <div v-for="(proj, i) in info.projects" :key="i" class="p-3 rounded" style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.04);">
                   <h4 class="text-white font-semibold text-sm">{{ proj.name }}</h4>
-                  <p class="text-xs text-slate-400 mt-1 whitespace-pre-line" v-if="proj.description">{{ proj.description }}</p>
+                  <ul v-if="descriptionLines(proj.description).length > 1" class="list-disc pl-5 text-xs text-slate-400 mt-1 leading-relaxed space-y-1">
+                    <li v-for="(line, j) in descriptionLines(proj.description)" :key="j">{{ line }}</li>
+                  </ul>
+                  <p class="text-xs text-slate-400 mt-1" v-else-if="descriptionLines(proj.description).length === 1">{{ descriptionLines(proj.description)[0] }}</p>
                   <a v-if="proj.link" :href="proj.link" target="_blank" class="text-[10px] font-mono mt-1 inline-block" style="color:var(--teal);">{{ proj.link }}</a>
                 </div>
               </div>
@@ -2206,7 +2217,7 @@ const ProfileDetailPage = {
       }
     });
     onUnmounted(() => { unmounted = true; });
-    return { store, profile, info, profileId, groupedSkills, atsChecks, chatOpen, showChatFab, showCta, ctaDismissed, editing, saving, deleting, editError, ed, onChatModified, startEdit, cancelEdit, saveEdit, goCreateJob, doDelete };
+    return { store, profile, info, profileId, groupedSkills, atsChecks, chatOpen, showChatFab, showCta, ctaDismissed, editing, saving, deleting, editError, ed, descriptionLines, onChatModified, startEdit, cancelEdit, saveEdit, goCreateJob, doDelete };
   },
 };
 

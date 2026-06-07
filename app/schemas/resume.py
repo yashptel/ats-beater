@@ -68,6 +68,55 @@ class Experience(BaseModel):
         return normalize_profile_description(value)
 
 
+def _join_extracted_description(value: list[str]) -> str:
+    lines: list[str] = []
+    for item in value:
+        normalized = normalize_profile_description(item)
+        if isinstance(normalized, str):
+            lines.extend(line for line in normalized.split("\n") if line.strip())
+    return "\n".join(lines)
+
+
+class ExtractedProject(BaseModel):
+    name: str = Field(..., title="Name of the project")
+    link: Optional[str] = Field(default=None, title="Link to the project")
+    description: List[str] = Field(
+        default=[],
+        title="Project bullet points, one distinct resume bullet per item",
+    )
+
+    def to_project(self) -> Project:
+        return Project(
+            name=self.name,
+            link=self.link,
+            description=_join_extracted_description(self.description),
+        )
+
+
+class ExtractedExperience(BaseModel):
+    company_name: str = Field(..., title="Name of the company")
+    department: Optional[str] = Field(default=None, title="Department or team name")
+    location: Optional[str] = Field(default=None, title="Location")
+    start_date: Optional[str] = Field(default=None, title="Start date of the experience")
+    end_date: Optional[str] = Field(default=None, title="End date of the experience")
+    role: str = Field(..., title="Role in the company")
+    description: List[str] = Field(
+        default=[],
+        title="Experience bullet points, one distinct resume bullet per item",
+    )
+
+    def to_experience(self) -> Experience:
+        return Experience(
+            company_name=self.company_name,
+            department=self.department,
+            location=self.location,
+            start_date=self.start_date,
+            end_date=self.end_date,
+            role=self.role,
+            description=_join_extracted_description(self.description),
+        )
+
+
 class Achievement(BaseModel):
     name: str = Field(..., title="Name of the achievement")
     description: Optional[str] = Field(default=None, title="Description of the achievement")
@@ -124,3 +173,51 @@ class ResumeInfo(BaseModel):
     certifications: List[Certification] = Field(default=[], title="List of certifications")
     patents: List[Patent] = Field(default=[], title="List of patents")
     papers: List[Paper] = Field(default=[], title="List of papers")
+
+
+class ExtractedResumeInfo(BaseModel):
+    """LLM-only extraction schema.
+
+    Public profile data still serializes descriptions as strings, but extraction
+    asks the model for bullet arrays so schema validation can enforce boundaries.
+    """
+
+    name: str = Field(title="Name")
+    mobile_number: Optional[str] = Field(default=None, title="Mobile number")
+    location: Optional[str] = Field(default=None, title="Candidate location")
+    date_of_birth: Optional[str] = Field(
+        default=None, description='Date of birth in the format "YYYY-MM-DD"'
+    )
+    email: str = Field(title="Email")
+    summary: Optional[str] = Field(
+        default=None,
+        title="Optional professional summary extracted verbatim from the resume",
+    )
+    links: List[Link] = Field(default=[], title="List of all profile links found in the resume")
+    projects: List[ExtractedProject] = Field(default=[], title="List of projects")
+    past_experience: List[ExtractedExperience] = Field(default=[], title="List of experiences")
+    achievements: List[Achievement] = Field(default=[], title="List of achievements")
+    skills: List[Skill] = Field(default=[], title="List of ALL skills mentioned in the resume")
+    educations: List[Education] = Field(default=[], title="List of educations")
+    certifications: List[Certification] = Field(default=[], title="List of certifications")
+    patents: List[Patent] = Field(default=[], title="List of patents")
+    papers: List[Paper] = Field(default=[], title="List of papers")
+
+    def to_resume_info(self) -> ResumeInfo:
+        return ResumeInfo(
+            name=self.name,
+            mobile_number=self.mobile_number,
+            location=self.location,
+            date_of_birth=self.date_of_birth,
+            email=self.email,
+            summary=self.summary,
+            links=self.links,
+            projects=[project.to_project() for project in self.projects],
+            past_experience=[exp.to_experience() for exp in self.past_experience],
+            achievements=self.achievements,
+            skills=self.skills,
+            educations=self.educations,
+            certifications=self.certifications,
+            patents=self.patents,
+            papers=self.papers,
+        )

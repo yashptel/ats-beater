@@ -1,5 +1,13 @@
 import pytest
-from app.schemas.resume import ResumeInfo, Link, Project, Experience, Skill, Education
+from app.schemas.resume import (
+    Education,
+    Experience,
+    ExtractedResumeInfo,
+    Link,
+    Project,
+    ResumeInfo,
+    Skill,
+)
 
 
 def test_resume_info_minimal():
@@ -158,4 +166,44 @@ def test_resume_info_normalizes_wrapped_pdf_extraction_pattern():
         "React frontend, Go/GraphQL backend, and PostgreSQL.\n"
         "Created a heuristic DAG-based production scheduler with topological "
         "ready-queue and critical-path ranking."
+    )
+
+
+def test_extracted_resume_info_converts_bullet_arrays_to_public_profile_strings():
+    extracted = ExtractedResumeInfo.model_validate(
+        {
+            "name": "Yash Patel",
+            "email": "yash@example.com",
+            "past_experience": [
+                {
+                    "company_name": "Toddle",
+                    "role": "Software Engineer II",
+                    "description": [
+                        "Designed a 64-bit Snowflake-style ID system.",
+                        "Executed a zero-downtime PostgreSQL migration of 2B rows.",
+                    ],
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Sidekick",
+                    "description": [
+                        "Built an always-on AI desktop overlay.",
+                        "Developed local Whisper STT with 500ms to 1.5s latency.",
+                    ],
+                }
+            ],
+        }
+    )
+
+    info = extracted.to_resume_info()
+
+    assert isinstance(info, ResumeInfo)
+    assert info.past_experience[0].description == (
+        "Designed a 64-bit Snowflake-style ID system.\n"
+        "Executed a zero-downtime PostgreSQL migration of 2B rows."
+    )
+    assert info.projects[0].description == (
+        "Built an always-on AI desktop overlay.\n"
+        "Developed local Whisper STT with 500ms to 1.5s latency."
     )

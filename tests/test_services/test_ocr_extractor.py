@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 from app.services.ocr import extractor as extractor_mod
 from app.services.ocr.extractor import PDFExtractor
 from app.services.ai.user_settings import ResolvedAISettings
+from app.schemas.resume import ExtractedResumeInfo
 
 
 class _FakePage:
@@ -17,7 +18,15 @@ async def test_vision_extraction_routes_through_active_provider(monkeypatch):
         extractor_mod, "convert_from_bytes", lambda pdf, dpi=200: [_FakePage(), _FakePage()]
     )
     fake_llm = MagicMock()
-    fake_llm.run_inference = AsyncMock(return_value={"name": "X"})
+    fake_llm.run_inference = AsyncMock(
+        return_value={
+            "name": "X",
+            "email": "x@example.com",
+            "projects": [
+                {"name": "P", "description": ["Built X", "Shipped Y"]},
+            ],
+        }
+    )
     captured = {}
 
     def fake_build(resolved):
@@ -39,11 +48,13 @@ async def test_vision_extraction_routes_through_active_provider(monkeypatch):
         extracted_text="pdfplumber text with bullet context",
     )
 
-    assert result == {"name": "X"}
+    assert result["name"] == "X"
+    assert result["projects"][0]["description"] == "Built X\nShipped Y"
     # The extractor used the active provider, not a hard-coded Gemini client.
     assert captured["resolved"] is resolved
     kwargs = fake_llm.run_inference.await_args.kwargs
     assert kwargs["purpose"] == "profile_structuring_vision"
+    assert kwargs["structured_output_schema"] is ExtractedResumeInfo
     assert any(
         isinstance(i, str) and "pdfplumber text with bullet context" in i
         for i in kwargs["inputs"]

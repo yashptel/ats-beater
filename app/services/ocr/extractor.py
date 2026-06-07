@@ -6,7 +6,7 @@ from pdf2image import convert_from_bytes
 from app.services.ai.provider import build_inference
 from app.services.ai.inference import PRIMARY_TIMEOUT_SECONDS
 from app.services.ai.prompts import STRUCTURED_RESUME_SYSTEM_PROMPT
-from app.schemas.resume import ResumeInfo
+from app.schemas.resume import ExtractedResumeInfo
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -56,20 +56,21 @@ class PDFExtractor:
                 f"{extracted_text}"
                 "\n</pdf_text_extraction>\n\n"
                 "The text above came from local PDF text extraction. Use it for exact wording, "
-                "but trust the page images when deciding where bullets and sections begin."
+                "but trust the page images when deciding where bullets and sections begin. "
+                "Every distinct visual bullet must become its own item in the description arrays."
             )
         input_parts.extend(images)
 
         result = await llm.run_inference(
             system_prompt=STRUCTURED_RESUME_SYSTEM_PROMPT,
             inputs=input_parts,
-            structured_output_schema=ResumeInfo,
+            structured_output_schema=ExtractedResumeInfo,
             user_id=user_id,
             purpose="profile_structuring_vision",
             reference_id=reference_id,
             primary_timeout=primary_timeout,
         )
-        return result
+        return ExtractedResumeInfo.model_validate(result).to_resume_info().model_dump()
 
     @staticmethod
     def _has_high_non_ascii_ratio(text: str) -> bool:

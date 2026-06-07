@@ -3,7 +3,7 @@ STRUCTURED_RESUME_SYSTEM_PROMPT = """
 - CRITICAL: Do NOT drop, omit, summarize, or lose ANY information from the resume. Every single detail must be preserved.
 - Extract EVERY skill mentioned in the resume. If the resume lists 30 skills, the output must have 30 skills. Do not cherry-pick or summarize.
 - Preserve skill categories as they appear in the resume (e.g. "Programming", "Frameworks", "Cloud/Infra", "Data", "AI", "Quant/Systems"). Use these as the `category` field.
-- For experience and project descriptions: include ALL bullet points and details. Return each bullet as newline-delimited text inside the description string: one bullet/idea per line.
+- For experience and project descriptions: include ALL bullet points and details. If the schema field is an array, return each distinct visual bullet as its own array item. If the schema field is a string, return newline-delimited text with one bullet/idea per line.
 - Do NOT include visual bullet glyphs or extracted bullet markers in JSON descriptions. Strip prefixes/separators like "•", "·", "-", "• ·", or repeated bullet symbols while preserving the actual wording after them.
 - If PDF text extraction collapses bullets into one paragraph, use the page images/layout to recover the real bullet boundaries and insert newlines between bullets.
 - Extract ALL links/profiles mentioned (GitHub, LinkedIn, Codeforces, LeetCode, Portfolio, personal website, etc.). Use the platform name as the `name` field. Construct the full URL if the username/handle is provided.
