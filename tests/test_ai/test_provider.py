@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -5,6 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.schemas.custom_resume import CustomResumeInfo
+from app.schemas.resume import ExtractedResumeInfo
 from app.schemas.roast import RoastResult
 from app.services.ai.inference import (
     GeminiInference,
@@ -69,6 +71,7 @@ def test_openai_compatible_client_disables_sdk_retries():
 def test_structured_output_contract_includes_required_schema_fields():
     roast_contract = build_structured_output_contract(RoastResult)
     resume_contract = build_structured_output_contract(CustomResumeInfo)
+    extracted_contract = build_structured_output_contract(ExtractedResumeInfo)
 
     assert "headline" in roast_contract
     assert "roast_points" in roast_contract
@@ -76,6 +79,19 @@ def test_structured_output_contract_includes_required_schema_fields():
     assert "past_experience" in resume_contract
     assert "projects" in resume_contract
     assert "email" in resume_contract
+    assert "ExtractedExperience" in extracted_contract
+    assert "description" in extracted_contract
+    extracted_schema = json.loads(extracted_contract.split("JSON schema: ", 1)[1])
+    extracted_project = extracted_schema["$defs"]["ExtractedProject"]
+    extracted_experience = extracted_schema["$defs"]["ExtractedExperience"]
+    assert "description" in extracted_project["properties"]
+    assert "description" in extracted_experience["properties"]
+    assert set(extracted_project["required"]) == {"name", "description"}
+    assert set(extracted_experience["required"]) == {
+        "company_name",
+        "role",
+        "description",
+    }
 
 
 def _completion(content):
@@ -266,6 +282,43 @@ async def test_openai_structured_vision_repair_preserves_image_parts():
         and any(part.get("type") == "image_url" for part in message["content"])
         for message in second_call["messages"]
     )
+
+
+@pytest.mark.asyncio
+async def test_openai_profile_extraction_repairs_missing_descriptions():
+    inf = _make_openai()
+    inf.client = MagicMock()
+    inf.client.chat.completions.create = AsyncMock(
+        side_effect=[
+            _completion(
+                '{"name":"Yash","email":"yash@example.com",'
+                '"projects":[{"name":"Sidekick"}],'
+                '"past_experience":[{"company_name":"Toddle","role":"SWE II"}]}'
+            ),
+            _completion(
+                '{"name":"Yash","email":"yash@example.com",'
+                '"projects":[{"name":"Sidekick","description":["Built Sidekick."]}],'
+                '"past_experience":[{"company_name":"Toddle","role":"SWE II",'
+                '"description":["Built platform systems."]}]}'
+            ),
+        ]
+    )
+
+    result = await inf.run_inference(
+        system_prompt="Extract the resume.",
+        inputs=[
+            "page text",
+            {"inline_data": {"mime_type": "image/jpeg", "data": "QUJD"}},
+        ],
+        structured_output_schema=ExtractedResumeInfo,
+    )
+
+    assert result["projects"][0]["description"] == ["Built Sidekick."]
+    assert result["past_experience"][0]["description"] == ["Built platform systems."]
+    assert inf.client.chat.completions.create.await_count == 2
+    second_call = inf.client.chat.completions.create.await_args_list[1].kwargs
+    assert "projects.0.description" in second_call["messages"][-1]["content"]
+    assert "past_experience.0.description" in second_call["messages"][-1]["content"]
 
 
 @pytest.mark.asyncio

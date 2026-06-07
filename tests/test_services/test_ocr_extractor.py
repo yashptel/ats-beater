@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.ocr import extractor as extractor_mod
@@ -61,3 +62,35 @@ async def test_vision_extraction_routes_through_active_provider(monkeypatch):
     )
     # Page images are still passed as inline-image dicts (provider adapts them).
     assert sum(1 for i in kwargs["inputs"] if isinstance(i, dict) and "inline_data" in i) == 2
+
+
+@pytest.mark.asyncio
+async def test_vision_extraction_rejects_missing_descriptions(monkeypatch):
+    monkeypatch.setattr(
+        extractor_mod, "convert_from_bytes", lambda pdf, dpi=200: [_FakePage()]
+    )
+    fake_llm = MagicMock()
+    fake_llm.run_inference = AsyncMock(
+        return_value={
+            "name": "X",
+            "email": "x@example.com",
+            "projects": [{"name": "P"}],
+            "past_experience": [{"company_name": "C", "role": "R"}],
+        }
+    )
+    monkeypatch.setattr(extractor_mod, "build_inference", lambda resolved: fake_llm)
+
+    ext = PDFExtractor()
+    resolved = ResolvedAISettings(
+        api_key="k",
+        model_name="qwen-vl",
+        provider="openai_compatible",
+        base_url="https://proxy.example.com/v1",
+    )
+
+    with pytest.raises(ValidationError):
+        await ext.extract_and_structure_via_vision(
+            b"pdf-bytes",
+            ai_settings=resolved,
+            extracted_text="pdfplumber text with bullet context",
+        )

@@ -95,13 +95,13 @@ def parse_structured_output(
     return structured_output_schema.model_validate(parsed_content).model_dump()
 
 
-def _compact_json_schema(value: Any) -> Any:
+def _compact_json_schema(value: Any, *, in_properties: bool = False) -> Any:
     """Remove prose-only JSON schema fields so repair prompts stay focused."""
     if isinstance(value, dict):
         return {
-            key: _compact_json_schema(item)
+            key: _compact_json_schema(item, in_properties=(key == "properties"))
             for key, item in value.items()
-            if key not in {"title", "description", "default", "examples"}
+            if in_properties or key not in {"title", "description", "default", "examples"}
         }
     if isinstance(value, list):
         return [_compact_json_schema(item) for item in value]
@@ -160,8 +160,8 @@ def format_structured_output_error(error: Exception) -> str:
 
     compact_errors = [
         {
-            "loc": item.get("loc", ()),
-            "msg": item.get("msg", ""),
+            "path": ".".join(str(part) for part in item.get("loc", ())),
+            "message": item.get("msg", ""),
             "type": item.get("type", ""),
         }
         for item in error.errors()

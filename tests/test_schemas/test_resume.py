@@ -1,4 +1,6 @@
 import pytest
+from pydantic import ValidationError
+
 from app.schemas.resume import (
     Education,
     Experience,
@@ -206,4 +208,68 @@ def test_extracted_resume_info_converts_bullet_arrays_to_public_profile_strings(
     assert info.projects[0].description == (
         "Built an always-on AI desktop overlay.\n"
         "Developed local Whisper STT with 500ms to 1.5s latency."
+    )
+
+
+def test_extracted_resume_info_rejects_missing_descriptions():
+    with pytest.raises(ValidationError) as exc_info:
+        ExtractedResumeInfo.model_validate(
+            {
+                "name": "Yash Patel",
+                "email": "yash@example.com",
+                "past_experience": [
+                    {
+                        "company_name": "Toddle",
+                        "role": "Software Engineer II",
+                    }
+                ],
+                "projects": [{"name": "Sidekick"}],
+            }
+        )
+
+    errors = exc_info.value.errors()
+    assert ("past_experience", 0, "description") in [
+        tuple(error["loc"]) for error in errors
+    ]
+    assert ("projects", 0, "description") in [
+        tuple(error["loc"]) for error in errors
+    ]
+
+
+def test_extracted_resume_info_accepts_legacy_string_descriptions():
+    extracted = ExtractedResumeInfo.model_validate(
+        {
+            "name": "Yash Patel",
+            "email": "yash@example.com",
+            "past_experience": [
+                {
+                    "company_name": "Toddle",
+                    "role": "Software Engineer II",
+                    "description": (
+                        "• Designed a 64-bit Snowflake-style ID system. "
+                        "· Executed a zero-downtime PostgreSQL migration."
+                    ),
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Sidekick",
+                    "description": (
+                        "• Built an always-on AI desktop overlay. "
+                        "· Developed local Whisper STT."
+                    ),
+                }
+            ],
+        }
+    )
+
+    info = extracted.to_resume_info()
+
+    assert info.past_experience[0].description == (
+        "Designed a 64-bit Snowflake-style ID system.\n"
+        "Executed a zero-downtime PostgreSQL migration."
+    )
+    assert info.projects[0].description == (
+        "Built an always-on AI desktop overlay.\n"
+        "Developed local Whisper STT."
     )

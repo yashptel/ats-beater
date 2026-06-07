@@ -1,7 +1,7 @@
 import re
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 _BULLET_SEPARATOR_RE = re.compile(r"(?:^|\s)[\u2022\u00b7]\s*(?:[\u2022\u00b7]\s*)*")
@@ -77,13 +77,92 @@ def _join_extracted_description(value: list[str]) -> str:
     return "\n".join(lines)
 
 
+_EXTRACTED_DESCRIPTION_ALIASES = (
+    "description",
+    "descriptions",
+    "bullets",
+    "bullet_points",
+    "bulletPoints",
+    "details",
+    "highlights",
+    "responsibilities",
+)
+_EXTRACTED_DESCRIPTION_TEXT_KEYS = (
+    "text",
+    "description",
+    "bullet",
+    "point",
+    "content",
+    "detail",
+)
+
+
+def _with_extracted_description_alias(data: Any) -> Any:
+    if not isinstance(data, dict) or "description" in data:
+        return data
+
+    for key in _EXTRACTED_DESCRIPTION_ALIASES:
+        if key in data:
+            return {**data, "description": data[key]}
+    return data
+
+
+def _coerce_extracted_description(value: Any) -> Any:
+    raw_items = [value] if isinstance(value, str) else value
+    if not isinstance(raw_items, list):
+        return value
+
+    lines: list[str] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            item = next(
+                (
+                    item[key]
+                    for key in _EXTRACTED_DESCRIPTION_TEXT_KEYS
+                    if isinstance(item.get(key), str) and item[key].strip()
+                ),
+                item,
+            )
+        if not isinstance(item, str):
+            return value
+        normalized = normalize_profile_description(item)
+        if isinstance(normalized, str):
+            lines.extend(line.strip() for line in normalized.split("\n") if line.strip())
+
+    return lines
+
+
+def _require_extracted_description(value: list[str]) -> list[str]:
+    lines = _coerce_extracted_description(value)
+    if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
+        return value
+    if not lines:
+        raise ValueError("description must include at least one extracted bullet or detail")
+    return lines
+
+
 class ExtractedProject(BaseModel):
     name: str = Field(..., title="Name of the project")
     link: Optional[str] = Field(default=None, title="Link to the project")
     description: List[str] = Field(
-        default=[],
+        ...,
         title="Project bullet points, one distinct resume bullet per item",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_description_aliases(cls, data: Any) -> Any:
+        return _with_extracted_description_alias(data)
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def coerce_description(cls, value: Any) -> Any:
+        return _coerce_extracted_description(value)
+
+    @field_validator("description")
+    @classmethod
+    def require_description(cls, value: list[str]) -> list[str]:
+        return _require_extracted_description(value)
 
     def to_project(self) -> Project:
         return Project(
@@ -101,9 +180,24 @@ class ExtractedExperience(BaseModel):
     end_date: Optional[str] = Field(default=None, title="End date of the experience")
     role: str = Field(..., title="Role in the company")
     description: List[str] = Field(
-        default=[],
+        ...,
         title="Experience bullet points, one distinct resume bullet per item",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_description_aliases(cls, data: Any) -> Any:
+        return _with_extracted_description_alias(data)
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def coerce_description(cls, value: Any) -> Any:
+        return _coerce_extracted_description(value)
+
+    @field_validator("description")
+    @classmethod
+    def require_description(cls, value: list[str]) -> list[str]:
+        return _require_extracted_description(value)
 
     def to_experience(self) -> Experience:
         return Experience(
