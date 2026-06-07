@@ -248,6 +248,23 @@ def test_build_resume_emphasis_in_achievements():
     assert r"\textit{national}" in latex
 
 
+def test_build_resume_achievements_use_standard_resume_item_list():
+    """Standalone list sections should use the same bullet macro as resume body."""
+    info = CustomResumeInfo(
+        name="Test",
+        email="test@test.com",
+        achievements=["Ranked in the top 100 out of 15,000 participants"],
+    )
+
+    latex = build_resume(info, template_id="mono")
+    section = latex.split(r"\section{ACHIEVEMENTS}", 1)[1]
+
+    assert r"\resumeItemListStart" in section
+    assert r"\resumeItem{Ranked in the top 100 out of 15,000 participants}" in section
+    assert r"\resumeItemListEnd" in section
+    assert r"\begin{itemize}[leftmargin=0.24in]" not in section
+
+
 def test_build_resume_emphasis_with_escaped_braces():
     """Emphasis still works when text contains escaped braces from sanitizer.
 

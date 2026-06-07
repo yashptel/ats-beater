@@ -429,11 +429,10 @@ def _add_string_list_section(
     if not items:
         return resume_latex
 
-    margin = "0.15in" if template.id == "jake" else "0.24in"
-    lines = [_section(template, title), rf"\begin{{itemize}}[leftmargin={margin}]"]
+    lines = [_section(template, title), r"\resumeItemListStart"]
     for item in items:
         lines.append(rf"\resumeItem{{{_fmt_body(item)}}}")
-    lines.append(r"\end{itemize}")
+    lines.append(r"\resumeItemListEnd")
     lines.append("")
     return resume_latex + "\n".join(lines)
 

@@ -133,6 +133,30 @@ function descriptionLines(description) {
   return String(description).split(/\n+/).map(line => line.trim()).filter(Boolean);
 }
 
+function descriptionEditLines(description) {
+  const text = String(description || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = text.split('\n');
+  return lines.length ? lines : [''];
+}
+
+function normalizeDescriptionText(description) {
+  return descriptionEditLines(description).map(line => line.trim()).filter(Boolean).join('\n');
+}
+
+function normalizeProfileDescriptions(data) {
+  return {
+    ...data,
+    past_experience: (data.past_experience || []).map(exp => ({
+      ...exp,
+      description: normalizeDescriptionText(exp.description),
+    })),
+    projects: (data.projects || []).map(project => ({
+      ...project,
+      description: normalizeDescriptionText(project.description),
+    })),
+  };
+}
+
 function jobLabel(j) {
   const jd = j.job_description;
   if (jd && jd.role && jd.company) return `${jd.role} at ${jd.company}`;
@@ -1613,7 +1637,83 @@ const ProfileUploadPage = {
 // ================================================================
 // PAGES — Profile Detail
 // ================================================================
+const ProfileBulletList = {
+  props: {
+    description: { type: String, default: '' },
+    tight: { type: Boolean, default: false },
+  },
+  template: `
+    <div v-if="lines.length" class="space-y-1" :class="tight ? 'mt-1' : 'mt-2'">
+      <div v-for="(line, i) in lines" :key="i" class="flex items-start gap-2">
+        <span class="mt-[7px] h-1.5 w-1.5 rounded-full flex-shrink-0" style="background:var(--teal);box-shadow:0 0 8px rgba(1,169,219,0.35);"></span>
+        <p class="text-xs text-slate-400 leading-relaxed min-w-0">{{ line }}</p>
+      </div>
+    </div>
+  `,
+  setup(props) {
+    const lines = computed(() => descriptionLines(props.description));
+    return { lines };
+  },
+};
+
+const ProfileBulletEditor = {
+  props: {
+    modelValue: { type: String, default: '' },
+  },
+  emits: ['update:modelValue'],
+  template: `
+    <div class="space-y-2">
+      <div v-for="(line, i) in lines" :key="i" class="flex items-start gap-2">
+        <span class="mt-4 h-1.5 w-1.5 rounded-full flex-shrink-0" style="background:var(--teal);box-shadow:0 0 8px rgba(1,169,219,0.35);"></span>
+        <textarea
+          :value="line"
+          @input="updateLine(i, $event.target.value)"
+          @keydown.enter.exact.prevent="addLine(i)"
+          class="input-field flex-1 min-h-[44px]"
+          rows="2"
+          :placeholder="'Point ' + (i + 1)"
+        ></textarea>
+        <div class="flex flex-col gap-1 pt-1 flex-shrink-0">
+          <button type="button" @click="addLine(i)" class="btn-ghost text-[10px] px-2 min-h-0 h-7" title="Add point">+</button>
+          <button type="button" @click="removeLine(i)" class="text-red-400 hover:text-red-300 text-xs h-7 px-2" title="Remove point">X</button>
+        </div>
+      </div>
+    </div>
+  `,
+  setup(props, { emit }) {
+    const lines = computed(() => {
+      const current = descriptionEditLines(props.modelValue);
+      return current.length ? current : [''];
+    });
+    const emitLines = (nextLines) => {
+      emit('update:modelValue', nextLines.join('\n'));
+    };
+    const updateLine = (index, value) => {
+      const current = [...lines.value];
+      const replacement = String(value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+      current.splice(index, 1, ...replacement);
+      emitLines(current);
+    };
+    const addLine = (index) => {
+      const current = [...lines.value];
+      current.splice(index + 1, 0, '');
+      emitLines(current);
+    };
+    const removeLine = (index) => {
+      const current = [...lines.value];
+      if (current.length <= 1) {
+        emitLines(['']);
+        return;
+      }
+      current.splice(index, 1);
+      emitLines(current);
+    };
+    return { lines, updateLine, addLine, removeLine };
+  },
+};
+
 const ProfileDetailPage = {
+  components: { ProfileBulletList, ProfileBulletEditor },
   template: `
     <div>
       <TopHeader>
@@ -1711,10 +1811,7 @@ const ProfileDetailPage = {
                     </div>
                     <span class="font-mono text-[10px] text-slate-500 flex-shrink-0">{{ [exp.start_date, exp.end_date || 'Present'].filter(Boolean).join(' — ') }}</span>
                   </div>
-                  <ul v-if="descriptionLines(exp.description).length > 1" class="list-disc pl-5 text-xs text-slate-400 mt-2 leading-relaxed space-y-1">
-                    <li v-for="(line, j) in descriptionLines(exp.description)" :key="j">{{ line }}</li>
-                  </ul>
-                  <p v-else-if="descriptionLines(exp.description).length === 1" class="text-xs text-slate-400 mt-2 leading-relaxed">{{ descriptionLines(exp.description)[0] }}</p>
+                  <ProfileBulletList :description="exp.description" />
                 </div>
               </div>
             </div>
@@ -1733,10 +1830,7 @@ const ProfileDetailPage = {
               <div class="space-y-3 mt-4">
                 <div v-for="(proj, i) in info.projects" :key="i" class="p-3 rounded" style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.04);">
                   <h4 class="text-white font-semibold text-sm">{{ proj.name }}</h4>
-                  <ul v-if="descriptionLines(proj.description).length > 1" class="list-disc pl-5 text-xs text-slate-400 mt-1 leading-relaxed space-y-1">
-                    <li v-for="(line, j) in descriptionLines(proj.description)" :key="j">{{ line }}</li>
-                  </ul>
-                  <p class="text-xs text-slate-400 mt-1" v-else-if="descriptionLines(proj.description).length === 1">{{ descriptionLines(proj.description)[0] }}</p>
+                  <ProfileBulletList :description="proj.description" tight />
                   <a v-if="proj.link" :href="proj.link" target="_blank" class="text-[10px] font-mono mt-1 inline-block" style="color:var(--teal);">{{ proj.link }}</a>
                 </div>
               </div>
@@ -1881,7 +1975,7 @@ const ProfileDetailPage = {
                     <div><label class="kpi-label block mb-1">Start Date</label><input v-model="exp.start_date" class="input-field" placeholder="YYYY-MM" /></div>
                     <div><label class="kpi-label block mb-1">End Date</label><input v-model="exp.end_date" class="input-field" placeholder="YYYY-MM or leave empty" /></div>
                   </div>
-                  <div class="mt-3"><label class="kpi-label block mb-1">Description</label><textarea v-model="exp.description" class="input-field" rows="4"></textarea></div>
+                  <div class="mt-3"><label class="kpi-label block mb-1">Description</label><ProfileBulletEditor v-model="exp.description" /></div>
                 </div>
               </div>
             </div>
@@ -1919,7 +2013,7 @@ const ProfileDetailPage = {
                     <div><label class="kpi-label block mb-1">Name</label><input v-model="proj.name" class="input-field" /></div>
                     <div><label class="kpi-label block mb-1">Link</label><input v-model="proj.link" class="input-field" placeholder="Optional URL" /></div>
                   </div>
-                  <div class="mt-3"><label class="kpi-label block mb-1">Description</label><textarea v-model="proj.description" class="input-field" rows="3"></textarea></div>
+                  <div class="mt-3"><label class="kpi-label block mb-1">Description</label><ProfileBulletEditor v-model="proj.description" /></div>
                 </div>
               </div>
             </div>
@@ -2174,7 +2268,7 @@ const ProfileDetailPage = {
       saving.value = true;
       editError.value = null;
       try {
-        const payload = { ...ed.value };
+        const payload = normalizeProfileDescriptions(ed.value);
         if (typeof payload.summary === 'string') {
           const trimmed = payload.summary.trim();
           payload.summary = trimmed === '' ? null : trimmed;
