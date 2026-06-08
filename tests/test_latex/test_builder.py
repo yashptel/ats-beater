@@ -81,10 +81,10 @@ def test_build_resume_mono_template_uses_google_docs_spacing():
         in latex
     )
     assert (
-        r"\begin{itemize}[leftmargin=0.30in,itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
+        r"\begin{itemize}[leftmargin=0.30in,itemsep=0pt,topsep=3pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
         in latex
     )
-    assert r"\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{4pt}}" in latex
+    assert r"\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{8pt}}" in latex
 
 
 def test_build_resume_hybrid_template_keeps_proportional_body():
@@ -371,7 +371,7 @@ def test_build_resume_with_projects():
     assert "PROJECTS" in latex
     assert "MyProject" in latex
     assert r"\resumeProjectHeading" in latex
-    assert r"\end{tabular*}\vspace{-4pt}" in latex
+    assert r"\end{tabular*}\vspace{0pt}" in latex
     assert (
         r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]"
         in latex

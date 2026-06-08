@@ -215,7 +215,7 @@ def _start_document(template: ResumeTemplate) -> str:
   \item[]%
   \begin{{tabular*}}{{0.99\textwidth}}{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
     #1 & #2 \\
-  \end{{tabular*}}\vspace{{-4pt}}
+  \end{{tabular*}}\vspace{{0pt}}
 }}
 
 \renewcommand\labelitemii{{$\vcenter{{\hbox{{\tiny$\bullet$}}}}$}}
@@ -224,8 +224,8 @@ def _start_document(template: ResumeTemplate) -> str:
 \newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
 \newcommand{{\resumeProjectHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]}}
 \newcommand{{\resumeProjectHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
-\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
-\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{4pt}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=0pt,topsep=3pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{8pt}}}}
 """
 
 
