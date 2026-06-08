@@ -100,6 +100,7 @@ def _start_document(template: ResumeTemplate) -> str:
 \usepackage{tabularx}
 \usepackage{array}
 \input{glyphtounicode}
+\pdfgentounicode=1
 
 \pagestyle{fancy}
 \fancyhf{}
@@ -182,6 +183,7 @@ def _start_document(template: ResumeTemplate) -> str:
 \usepackage{{needspace}}
 \usepackage{{setspace}}
 \input{{glyphtounicode}}
+\pdfgentounicode=1
 
 \pagestyle{{fancy}}
 \fancyhf{{}}
