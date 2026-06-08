@@ -161,6 +161,7 @@ def _start_document(template: ResumeTemplate) -> str:
         if template.id == "mono"
         else r"""
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{inconsolata}
 """
     )
