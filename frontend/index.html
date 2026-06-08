@@ -592,6 +592,48 @@
       background: rgba(0,0,0,0.5);
     }
     @media (max-width: 768px) { .chat-backdrop.visible { display: block; } }
+
+    /* ===== TOGGLE SWITCH ===== */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      transition: all 0.2s ease;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-dim);
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+    input:checked + .toggle-slider {
+      background-color: rgba(1, 169, 219, 0.2);
+      border-color: var(--teal);
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(16px);
+      background-color: var(--teal);
+    }
   </style>
 </head>
 <body class="antialiased">

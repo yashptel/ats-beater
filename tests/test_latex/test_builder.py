@@ -403,3 +403,41 @@ def test_build_resume_jake_projects_use_defined_list_macros():
     assert r"\resumeProjectHeadingListStart" not in latex
     assert r"\resumeProjectHeadingListEnd" not in latex
     assert "}{\\underline{Link}}" not in latex
+
+
+def test_build_resume_bold_keywords_toggle():
+    """When bold_keywords is False, raw ** emphasis is stripped instead of being converted to \\textbf{}."""
+    data = {
+        "name": "Jane",
+        "email": "jane@example.com",
+        "past_experience": [
+            {
+                "company_name": "Acme",
+                "role": "Dev",
+                "description": [
+                    "Reduced latency by **40%** using **Redis**",
+                    "Led *critical* migration",
+                ],
+                "start_date": "2020-01",
+                "end_date": "2023-06",
+            }
+        ],
+    }
+    sanitized = sanitize_special_chars(data)
+    info = CustomResumeInfo(**sanitized)
+
+    # 1. With bold_keywords=True (default)
+    latex_bold = build_resume(info, bold_keywords=True)
+    assert r"\textbf{40\%}" in latex_bold
+    assert r"\textbf{Redis}" in latex_bold
+    assert r"\textit{critical}" in latex_bold
+
+    # 2. With bold_keywords=False
+    latex_no_bold = build_resume(info, bold_keywords=False)
+    assert r"\textbf{40\%}" not in latex_no_bold
+    assert r"\textbf{Redis}" not in latex_no_bold
+    assert r"40\%" in latex_no_bold
+    assert "Redis" in latex_no_bold
+    # Italic should still convert normally
+    assert r"\textit{critical}" in latex_no_bold
+

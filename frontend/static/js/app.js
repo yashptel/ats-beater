@@ -442,6 +442,16 @@ const useJobStore = defineStore('job', {
         return data;
       } catch (e) { this.error = e.message; throw e; }
     },
+    async toggleBoldKeywords(jobId, boldKeywords) {
+      try {
+        const data = await api.post(`/jobs/${jobId}/bold-keywords`, { bold_keywords: boldKeywords });
+        if (this.current && this.current.id === jobId) {
+          this.current.bold_keywords = data.bold_keywords;
+          this.current.status = data.status;
+        }
+        return data;
+      } catch (e) { this.error = e.message; throw e; }
+    },
     async pollStatus(id, interval = 2000, maxPolls = 90) {
       const terminalStatuses = ['READY', 'FAILED'];
       const poll = async () => {
@@ -2895,6 +2905,13 @@ const JobDetailPage = {
         </template>
         <template #right>
           <div class="flex items-center gap-3">
+            <div v-if="jobStore.current && jobStore.current.status === 'READY'" class="hidden md:flex items-center gap-2 mr-2">
+              <span class="text-[10px] font-mono tracking-wider" style="color:var(--text-dim)">BOLD KEYWORDS</span>
+              <label class="toggle-switch">
+                <input type="checkbox" :checked="jobStore.current.bold_keywords" @change="toggleBoldKeywords($event.target.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
             <select v-if="jobStore.current && jobStore.current.status === 'READY'" v-model="selectedTemplateId" class="input-field input-mono text-xs hidden md:block" style="width:128px;padding:8px 28px 8px 10px;">
               <option v-for="tpl in templateStore.items" :key="'detail-template-'+tpl.id" :value="tpl.id">{{ tpl.name }}</option>
             </select>
@@ -2915,13 +2932,22 @@ const JobDetailPage = {
       <!-- ====== READY STATE: Split layout with PDF + Chat ====== -->
       <div v-if="jobStore.current && jobStore.current.status === 'READY' && jobStore.customResume" class="split-layout">
         <div class="split-main" style="padding:0;position:relative;">
-          <div class="md:hidden" style="position:absolute;left:12px;right:12px;bottom:12px;z-index:7;display:flex;gap:8px;">
-            <select v-model="selectedTemplateId" class="input-field input-mono text-xs" style="padding:8px 28px 8px 10px;">
-              <option v-for="tpl in templateStore.items" :key="'mobile-detail-template-'+tpl.id" :value="tpl.id">{{ tpl.name }}</option>
-            </select>
-            <button @click="applySelectedTemplate" class="btn-secondary text-xs whitespace-nowrap" :disabled="applyingTemplate || selectedTemplateId === jobStore.current.template_id">
-              {{ applyingTemplate ? '...' : 'APPLY' }}
-            </button>
+          <div class="md:hidden" style="position:absolute;left:12px;right:12px;bottom:12px;z-index:7;display:flex;flex-direction:column;gap:8px;background:rgba(22,43,69,0.9);backdrop-filter:blur(8px);padding:10px;border-radius:10px;border:1px solid var(--card-border);">
+            <div style="display:flex;gap:8px;">
+              <select v-model="selectedTemplateId" class="input-field input-mono text-xs" style="padding:8px 28px 8px 10px;">
+                <option v-for="tpl in templateStore.items" :key="'mobile-detail-template-'+tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+              </select>
+              <button @click="applySelectedTemplate" class="btn-secondary text-xs whitespace-nowrap" :disabled="applyingTemplate || selectedTemplateId === jobStore.current.template_id">
+                {{ applyingTemplate ? '...' : 'APPLY' }}
+              </button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px;">
+              <span class="text-[10px] font-mono tracking-wider" style="color:var(--text-dim)">BOLD KEYWORDS</span>
+              <label class="toggle-switch">
+                <input type="checkbox" :checked="jobStore.current.bold_keywords" @change="toggleBoldKeywords($event.target.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
           <div v-if="pdfLoading" class="flex items-center justify-center" style="height:100%;">
             <div class="text-center">
@@ -3253,6 +3279,21 @@ const JobDetailPage = {
       }
     };
 
+    const toggleBoldKeywords = async (checked) => {
+      if (!jobStore.current) return;
+      pdfRecompiling.value = true;
+      templateError.value = null;
+      try {
+        await jobStore.toggleBoldKeywords(jobId.value, checked);
+        await jobStore.fetchJob(jobId.value);
+        await loadPdf();
+      } catch (e) {
+        templateError.value = e.message || 'Failed to toggle bold keywords. Your previous PDF was preserved.';
+      } finally {
+        pdfRecompiling.value = false;
+      }
+    };
+
     let unmounted = false;
     const onResize = () => { isMobile.value = window.innerWidth <= 768; };
     onMounted(() => {
@@ -3268,7 +3309,7 @@ const JobDetailPage = {
       if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value);
     });
 
-    return { auth, jobStore, templateStore, jobId, generating, downloading, applyingTemplate, selectedTemplateId, templateError, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, applySelectedTemplate, doGenerateResume, doGeneratePdf, smartRetry, doDownload };
+    return { auth, jobStore, templateStore, jobId, generating, downloading, applyingTemplate, selectedTemplateId, templateError, chatOpen, pdfUrl, pdfLoading, pdfError, pdfRecompiling, isMobile, genError, breadcrumbTitle, showChatFab, isProcessing, failedInPhase2, processingMessage, progressWidth, progressSteps, loadPdf, onChatModified, applySelectedTemplate, doGenerateResume, doGeneratePdf, smartRetry, doDownload, toggleBoldKeywords };
   },
 };
 

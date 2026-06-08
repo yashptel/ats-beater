@@ -56,6 +56,7 @@ async def list_jobs(
                 "profile_id": j.profile_id,
                 "job_description": j.job_description,
                 "template_id": j.template_id,
+                "bold_keywords": j.bold_keywords,
                 "candidate_name": (j.custom_resume_data or {}).get("name"),
                 "status": j.status.value,
                 "created_at": j.created_at.isoformat(),
@@ -83,7 +84,7 @@ async def create_job(
         payload.job_description,
         template_id=payload.template_id,
     )
-    return {"job_id": job.id, "status": job.status.value, "template_id": job.template_id}
+    return {"job_id": job.id, "status": job.status.value, "template_id": job.template_id, "bold_keywords": job.bold_keywords}
 
 
 @router.post("/{job_id}/generate-resume", status_code=202)
@@ -164,6 +165,7 @@ async def get_job(
         "profile_id": job.profile_id,
         "job_description": job.job_description,
         "template_id": job.template_id,
+        "bold_keywords": job.bold_keywords,
         "custom_resume_data": job.custom_resume_data,
         "status": job.status.value,
         "created_at": job.created_at.isoformat(),
@@ -190,6 +192,18 @@ async def apply_template(
 ):
     job = await service.apply_template(db, job_id, current_user.id, payload.template_id)
     return {"job_id": job.id, "status": job.status.value, "template_id": job.template_id}
+
+
+@router.post("/{job_id}/bold-keywords")
+async def toggle_bold_keywords(
+    job_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bold_keywords = payload.get("bold_keywords", True)
+    job = await service.toggle_bold_keywords(db, job_id, current_user.id, bold_keywords)
+    return {"job_id": job.id, "status": job.status.value, "bold_keywords": job.bold_keywords}
 
 
 @router.get("/{job_id}/pdf")

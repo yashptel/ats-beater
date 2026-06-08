@@ -1,4 +1,7 @@
+import contextvars
 import re
+
+_bold_keywords_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar('_bold_keywords_ctx', default=True)
 
 from app.schemas.custom_resume import (
     CustomCertification,
@@ -11,6 +14,7 @@ from app.schemas.custom_resume import (
 )
 from app.services.latex.sanitizer import (
     convert_markdown_emphasis,
+    convert_markdown_emphasis_no_bold,
     handle_special_chars,
     strip_markdown_emphasis,
 )
@@ -23,7 +27,10 @@ _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 def _fmt(text: str) -> str:
     """Convert markdown emphasis to LaTeX commands, with fallback to stripping."""
     try:
-        result = convert_markdown_emphasis(text)
+        if not _bold_keywords_ctx.get():
+            result = convert_markdown_emphasis_no_bold(text)
+        else:
+            result = convert_markdown_emphasis(text)
         added_open = result.count("{") - text.count("{")
         added_close = result.count("}") - text.count("}")
         if added_open != added_close:
@@ -507,8 +514,9 @@ def _add_achievements(
     )
 
 
-def build_resume(resume_info: CustomResumeInfo, template_id: str | None = None) -> str:
+def build_resume(resume_info: CustomResumeInfo, template_id: str | None = None, *, bold_keywords: bool = True) -> str:
     """Build a complete LaTeX resume from CustomResumeInfo. Data must already be sanitized."""
+    _bold_keywords_ctx.set(bold_keywords)
     template = get_resume_template(template_id)
     resume_latex = _start_document(template)
     resume_latex = _add_header(resume_latex, resume_info, template)

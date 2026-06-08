@@ -120,6 +120,19 @@ def convert_markdown_emphasis(text: str) -> str:
     return text
 
 
+def convert_markdown_emphasis_no_bold(text: str) -> str:
+    """Strip bold markers and convert italic markers to LaTeX commands.
+
+    Must run AFTER handle_special_chars since that escapes { and }.
+    """
+    # Bold: **text** → text
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    # Italic: *text* → \textit{text} (negative lookbehind/ahead for *)
+    text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"\\textit{\1}", text)
+    return text
+
+
+
 def strip_markdown_emphasis(text: str) -> str:
     """Remove all markdown emphasis markers (* and **) from text."""
     # Remove bold markers first, then italic

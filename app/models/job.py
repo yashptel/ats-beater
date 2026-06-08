@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Integer, String, Text, Enum, ForeignKey
+from sqlalchemy import Boolean, Integer, String, Text, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
@@ -23,6 +23,9 @@ class Job(TimestampMixin, Base):
     job_description: Mapped[dict] = mapped_column(JSON, nullable=False)
     template_id: Mapped[str] = mapped_column(
         String, nullable=False, server_default="jake", default="jake"
+    )
+    bold_keywords: Mapped[bool] = mapped_column(
+        "bold_keywords", nullable=False, server_default="true", default=True
     )
     custom_resume_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     resume_latex_code: Mapped[str | None] = mapped_column(Text, nullable=True)

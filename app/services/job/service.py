@@ -218,7 +218,7 @@ class JobService:
             sanitized = sanitize_special_chars(job.custom_resume_data)
             resume_info = CustomResumeInfo.model_validate(sanitized)
             template_id = normalize_template_id(job.template_id)
-            latex_code = build_resume(resume_info, template_id=template_id)
+            latex_code = build_resume(resume_info, template_id=template_id, bold_keywords=job.bold_keywords)
             logger.info(f"[job:{job_id}] LaTeX build: {int((time.monotonic() - t0) * 1000)}ms ({len(latex_code)} chars)")
 
             # Compile PDF
@@ -357,7 +357,7 @@ class JobService:
 
         sanitized = sanitize_special_chars(job.custom_resume_data)
         resume_info = CustomResumeInfo.model_validate(sanitized)
-        latex_code = build_resume(resume_info, template_id=target_template_id)
+        latex_code = build_resume(resume_info, template_id=target_template_id, bold_keywords=job.bold_keywords)
         pdf_bytes = await compile_latex(latex_code)
 
         local_path = PDF_DIR / f"{user_id}_{job_id}.pdf"
@@ -374,6 +374,40 @@ class JobService:
         logger.info(f"[job:{job_id}] Template switch COMPLETE total={total_ms}ms")
 
         asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id, target_template_id))
+        return job
+
+    async def toggle_bold_keywords(
+        self, db: AsyncSession, job_id: int, user_id: str, bold_keywords: bool
+    ) -> Job:
+        """Toggle bold keyword formatting and recompile the PDF."""
+        job = await self._get_job(db, job_id, user_id)
+        if not job.custom_resume_data:
+            raise ValueError("No custom resume data found. Generate the resume before toggling bold keywords.")
+
+        t_start = time.monotonic()
+        logger.info(f"[job:{job_id}] Bold keywords toggle to {bold_keywords} started")
+
+        job.bold_keywords = bold_keywords
+
+        sanitized = sanitize_special_chars(job.custom_resume_data)
+        resume_info = CustomResumeInfo.model_validate(sanitized)
+        template_id = normalize_template_id(job.template_id)
+        latex_code = build_resume(resume_info, template_id=template_id, bold_keywords=bold_keywords)
+        pdf_bytes = await compile_latex(latex_code)
+
+        local_path = PDF_DIR / f"{user_id}_{job_id}.pdf"
+        await asyncio.to_thread(local_path.write_bytes, pdf_bytes)
+
+        job.resume_latex_code = latex_code
+        job.pdf_gcs_path = str(local_path)
+        job.status = JobStatus.READY
+        await db.commit()
+        await db.refresh(job)
+
+        total_ms = int((time.monotonic() - t_start) * 1000)
+        logger.info(f"[job:{job_id}] Bold keywords toggle COMPLETE total={total_ms}ms")
+
+        asyncio.create_task(_background_gcs_upload(pdf_bytes, user_id, job_id, template_id))
         return job
 
     async def _get_job(self, db: AsyncSession, job_id: int, user_id: str, *, for_update: bool = False) -> Job:
