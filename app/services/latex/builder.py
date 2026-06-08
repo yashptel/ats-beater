@@ -191,15 +191,15 @@ def _start_document(template: ResumeTemplate) -> str:
 \raggedbottom
 \setlength{{\emergencystretch}}{{2em}}
 \sloppy
-\linespread{{1.02}}
+\linespread{{1.0}}
 \setlength{{\parindent}}{{0pt}}
 
 \titleformat{{\section}}[block]
   {{\centering\ttfamily\bfseries}}
   {{}}{{0pt}}
   {{}}
-  [\vspace{{-3pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
-\titlespacing*{{\section}}{{0pt}}{{14pt}}{{7pt}}
+  [\vspace{{-4pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
+\titlespacing*{{\section}}{{0pt}}{{9pt}}{{5pt}}
 
 \pdfgentounicode=1
 
@@ -207,7 +207,7 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \newcommand{{\resumeSubheading}}[4]{{%
   \Needspace{{4\baselineskip}}%
-  \vspace{{5pt}}\item[]%
+  \vspace{{2pt}}\item[]%
   \begin{{tabular*}}{{0.99\textwidth}}[t]{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
     \if\relax\detokenize{{#4}}\relax #1\else #1, #4\fi & #2 \\
   \end{{tabular*}}\\*[1pt]
@@ -223,10 +223,10 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \renewcommand\labelitemii{{$\vcenter{{\hbox{{\tiny$\bullet$}}}}$}}
 
-\newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in, label={{}}]}}
-\newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}}}
-\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=6pt,topsep=7pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
-\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{3pt}}}}
+\newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=2pt,topsep=2pt,parsep=0pt,partopsep=0pt]}}
+\newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{-2pt}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=4pt,topsep=4pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
 """
 
 
@@ -267,13 +267,13 @@ def _add_header(
         lines = [
             r"\begin{document}",
             r"\begin{center}",
-            rf"    {{\huge\ttfamily\bfseries {resume_info.name}}}\\[5pt]",
+            rf"    {{\ttfamily\bfseries\fontsize{{21.5pt}}{{24pt}}\selectfont {resume_info.name}}}\\[4pt]",
         ]
         if primary_parts:
-            lines.append(r"    " + r" $\cdot$ ".join(primary_parts) + r"\\[4pt]")
+            lines.append(r"    " + r" $\cdot$ ".join(primary_parts) + r"\\[3pt]")
         if secondary_parts:
             lines.append(r"    " + r" $\cdot$ ".join(secondary_parts))
-        lines.append(r"\end{center}")
+        lines.append(r"\end{center}\vspace{-6pt}")
         return resume_latex + "\n".join(lines) + "\n"
 
     lines = [
@@ -333,7 +333,7 @@ def _add_skills(
     else:
         lines = [
             _section(template, "Technical Skills"),
-            r"\begin{itemize}[leftmargin=0in, label={}]",
+            r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=2pt,parsep=0pt,partopsep=0pt]",
             r"    \item[]{",
             "     " + r" \\ ".join(skill_rows),
             r"    }",
