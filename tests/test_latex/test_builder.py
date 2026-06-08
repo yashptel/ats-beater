@@ -64,20 +64,20 @@ def test_build_resume_mono_template_uses_google_docs_spacing():
     latex = build_resume(info, template_id="mono")
 
     assert r"\documentclass[letterpaper,11pt]{article}" in latex
-    assert r"\usepackage[letterpaper,top=0.7cm,bottom=0.5cm,left=1.8cm,right=1.8cm]{geometry}" in latex
+    assert r"\usepackage[letterpaper,top=0.7cm,bottom=0.7cm,left=1.8cm,right=1.8cm]{geometry}" in latex
     assert r"\usepackage{setspace}" in latex
-    assert r"\setstretch{1.15}" in latex
-    assert r"\renewcommand{\arraystretch}{1.15}" in latex
+    assert r"\setstretch{1.1}" in latex
+    assert r"\renewcommand{\arraystretch}{1.1}" in latex
     assert r"\setlength{\parskip}{0pt}" in latex
     assert r"\centering\ttfamily\bfseries\fontsize{12pt}{13.8pt}\selectfont" in latex
-    assert r"[\vspace{-8pt}\noindent\rule{\linewidth}{0.8pt}]" in latex
+    assert r"[\vspace{-10pt}\noindent\rule{\linewidth}{0.8pt}]" in latex
     assert r"\titlespacing*{\section}{0pt}{8pt}{0pt}" in latex
     assert (
         r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
     assert (
-        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]"
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
     assert (
@@ -190,12 +190,12 @@ def test_build_resume_mono_template_gives_skills_custom_line_spacing():
 
     latex = build_resume(info, template_id="mono")
 
-    assert r"{\setstretch{1.3}" in latex
+    assert r"{\setstretch{1.25}" in latex
     assert (
         r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
-    assert latex.index(r"{\setstretch{1.3}") < latex.index(r"\textbf{Languages:}")
+    assert latex.index(r"{\setstretch{1.25}") < latex.index(r"\textbf{Languages:}")
 
 
 def test_build_resume_with_summary():
@@ -373,7 +373,7 @@ def test_build_resume_with_projects():
     assert r"\resumeProjectHeading" in latex
     assert r"\end{tabular*}\vspace{-4pt}" in latex
     assert (
-        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]"
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
     assert (
@@ -381,4 +381,25 @@ def test_build_resume_with_projects():
         in latex
     )
     assert r"\href{https://github.com/test}{\underline{\textbf{MyProject}}}" not in latex
+
+
+def test_build_resume_jake_projects_use_defined_list_macros():
+    info = CustomResumeInfo(
+        name="Test",
+        email="test@test.com",
+        projects=[
+            CustomProject(
+                name="MyProject",
+                link="https://github.com/test",
+                description=["Feature 1"],
+            )
+        ],
+    )
+
+    latex = build_resume(info, template_id="jake")
+
+    assert r"\resumeSubHeadingListStart" in latex
+    assert r"\resumeSubHeadingListEnd" in latex
+    assert r"\resumeProjectHeadingListStart" not in latex
+    assert r"\resumeProjectHeadingListEnd" not in latex
     assert "}{\\underline{Link}}" not in latex

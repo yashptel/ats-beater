@@ -163,7 +163,7 @@ def _start_document(template: ResumeTemplate) -> str:
 
 {font_setup}
 \usepackage{{latexsym}}
-\usepackage[letterpaper,top=0.7cm,bottom=0.5cm,left=1.8cm,right=1.8cm]{{geometry}}
+\usepackage[letterpaper,top=0.7cm,bottom=0.7cm,left=1.8cm,right=1.8cm]{{geometry}}
 \usepackage{{titlesec}}
 \usepackage[usenames,dvipsnames]{{color}}
 \usepackage{{enumitem}}
@@ -186,8 +186,8 @@ def _start_document(template: ResumeTemplate) -> str:
 \raggedbottom
 \setlength{{\emergencystretch}}{{2em}}
 \sloppy
-\setstretch{{1.15}}
-\renewcommand{{\arraystretch}}{{1.15}}
+\setstretch{{1.1}}
+\renewcommand{{\arraystretch}}{{1.1}}
 \setlength{{\parindent}}{{0pt}}
 \setlength{{\parskip}}{{0pt}}
 
@@ -195,7 +195,7 @@ def _start_document(template: ResumeTemplate) -> str:
   {{\centering\ttfamily\bfseries\fontsize{{12pt}}{{13.8pt}}\selectfont}}
   {{}}{{0pt}}
   {{}}
-  [\vspace{{-8pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
+  [\vspace{{-10pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
 \titlespacing*{{\section}}{{0pt}}{{8pt}}{{0pt}}
 
 \pdfgentounicode=1
@@ -222,7 +222,7 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]}}
 \newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
-\newcommand{{\resumeProjectHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]}}
+\newcommand{{\resumeProjectHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]}}
 \newcommand{{\resumeProjectHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
 \newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=6pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
 \newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{6pt}}}}
@@ -333,7 +333,7 @@ def _add_skills(
     else:
         lines = [
             _section(template, "Technical Skills"),
-            r"{\setstretch{1.3}",
+            r"{\setstretch{1.25}",
             r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]",
             r"    \item[]{",
             "     " + r" \\ ".join(skill_rows),
@@ -385,7 +385,18 @@ def _add_projects(
     if not resume_info.projects:
         return resume_latex
 
-    lines = [_section(template, "Projects"), r"\resumeProjectHeadingListStart"]
+    project_list_start = (
+        r"\resumeSubHeadingListStart"
+        if template.id == "jake"
+        else r"\resumeProjectHeadingListStart"
+    )
+    project_list_end = (
+        r"\resumeSubHeadingListEnd"
+        if template.id == "jake"
+        else r"\resumeProjectHeadingListEnd"
+    )
+
+    lines = [_section(template, "Projects"), project_list_start]
     for project in resume_info.projects:
         left, right = _project_heading(project)
         lines.append(rf"\resumeProjectHeading{{{left}}}{{{right}}}")
@@ -395,7 +406,7 @@ def _add_projects(
             lines.append(rf"\resumeItem{{{_fmt_body(point)}}}")
         lines.append(r"\resumeItemListEnd")
         lines.append("")
-    lines.append(r"\resumeProjectHeadingListEnd")
+    lines.append(project_list_end)
     lines.append("")
     return resume_latex + "\n".join(lines)
 
