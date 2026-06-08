@@ -81,10 +81,10 @@ def test_build_resume_mono_template_uses_google_docs_spacing():
         in latex
     )
     assert (
-        r"\begin{itemize}[leftmargin=0.30in,itemsep=6pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
+        r"\begin{itemize}[leftmargin=0.30in,itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
         in latex
     )
-    assert r"\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{6pt}}" in latex
+    assert r"\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{4pt}}" in latex
 
 
 def test_build_resume_hybrid_template_keeps_proportional_body():

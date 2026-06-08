@@ -224,8 +224,8 @@ def _start_document(template: ResumeTemplate) -> str:
 \newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
 \newcommand{{\resumeProjectHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt]}}
 \newcommand{{\resumeProjectHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
-\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=6pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
-\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{6pt}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=0pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{4pt}}}}
 """
 
 
