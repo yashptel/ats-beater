@@ -163,7 +163,7 @@ def _start_document(template: ResumeTemplate) -> str:
 
 {font_setup}
 \usepackage{{latexsym}}
-\usepackage[empty]{{fullpage}}
+\usepackage[letterpaper,top=0.7cm,bottom=0.5cm,left=1.8cm,right=1.8cm]{{geometry}}
 \usepackage{{titlesec}}
 \usepackage[usenames,dvipsnames]{{color}}
 \usepackage{{enumitem}}
@@ -172,6 +172,7 @@ def _start_document(template: ResumeTemplate) -> str:
 \usepackage[english]{{babel}}
 \usepackage{{tabularx}}
 \usepackage{{needspace}}
+\usepackage{{setspace}}
 \input{{glyphtounicode}}
 
 \pagestyle{{fancy}}
@@ -181,25 +182,21 @@ def _start_document(template: ResumeTemplate) -> str:
 \renewcommand{{\footrulewidth}}{{0pt}}
 \setlength{{\footskip}}{{6pt}}
 
-\addtolength{{\oddsidemargin}}{{-0.25in}}
-\addtolength{{\evensidemargin}}{{-0.25in}}
-\addtolength{{\textwidth}}{{0.5in}}
-\addtolength{{\topmargin}}{{-0.45in}}
-\addtolength{{\textheight}}{{0.85in}}
-
 \urlstyle{{same}}
 \raggedbottom
 \setlength{{\emergencystretch}}{{2em}}
 \sloppy
-\linespread{{1.0}}
+\setstretch{{1.15}}
+\renewcommand{{\arraystretch}}{{1.15}}
 \setlength{{\parindent}}{{0pt}}
+\setlength{{\parskip}}{{0pt}}
 
 \titleformat{{\section}}[block]
-  {{\centering\ttfamily\bfseries}}
+  {{\centering\ttfamily\bfseries\fontsize{{12pt}}{{13.8pt}}\selectfont}}
   {{}}{{0pt}}
   {{}}
-  [\vspace{{-4pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
-\titlespacing*{{\section}}{{0pt}}{{9pt}}{{5pt}}
+  [\vspace{{-8pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
+\titlespacing*{{\section}}{{0pt}}{{8pt}}{{0pt}}
 
 \pdfgentounicode=1
 
@@ -207,26 +204,28 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \newcommand{{\resumeSubheading}}[4]{{%
   \Needspace{{4\baselineskip}}%
-  \vspace{{2pt}}\item[]%
+  \vspace{{0pt}}\item[]%
   \begin{{tabular*}}{{0.99\textwidth}}[t]{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
     \if\relax\detokenize{{#4}}\relax #1\else #1, #4\fi & #2 \\
-  \end{{tabular*}}\\*[1pt]
-  \textbf{{#3}}\vspace{{-1pt}}
+  \end{{tabular*}}\\*[0pt]
+  \textbf{{#3}}
 }}
 
 \newcommand{{\resumeProjectHeading}}[2]{{%
   \item[]%
   \begin{{tabular*}}{{0.99\textwidth}}{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
     #1 & #2 \\
-  \end{{tabular*}}\vspace{{-3pt}}
+  \end{{tabular*}}\vspace{{-4pt}}
 }}
 
 \renewcommand\labelitemii{{$\vcenter{{\hbox{{\tiny$\bullet$}}}}$}}
 
-\newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=2pt,topsep=2pt,parsep=0pt,partopsep=0pt]}}
-\newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{-2pt}}}}
-\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=4pt,topsep=4pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
-\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
+\newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]}}
+\newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
+\newcommand{{\resumeProjectHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in,label={{}},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]}}
+\newcommand{{\resumeProjectHeadingListEnd}}{{\end{{itemize}}\vspace{{0pt}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=6pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{6pt}}}}
 """
 
 
@@ -266,14 +265,15 @@ def _add_header(
 
         lines = [
             r"\begin{document}",
+            r"\vspace{14pt}",
             r"\begin{center}",
-            rf"    {{\ttfamily\bfseries\fontsize{{21.5pt}}{{24pt}}\selectfont {resume_info.name}}}\\[4pt]",
+            rf"    {{\ttfamily\bfseries\fontsize{{22pt}}{{25.3pt}}\selectfont {resume_info.name}}}\\[6pt]",
         ]
         if primary_parts:
-            lines.append(r"    " + r" $\cdot$ ".join(primary_parts) + r"\\[3pt]")
+            lines.append(r"    " + r" $\cdot$ ".join(primary_parts) + r"\\[0pt]")
         if secondary_parts:
             lines.append(r"    " + r" $\cdot$ ".join(secondary_parts))
-        lines.append(r"\end{center}\vspace{-6pt}")
+        lines.append(r"\end{center}")
         return resume_latex + "\n".join(lines) + "\n"
 
     lines = [
@@ -333,11 +333,13 @@ def _add_skills(
     else:
         lines = [
             _section(template, "Technical Skills"),
-            r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=2pt,parsep=0pt,partopsep=0pt]",
+            r"{\setstretch{1.3}",
+            r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]",
             r"    \item[]{",
             "     " + r" \\ ".join(skill_rows),
             r"    }",
             r"\end{itemize}",
+            r"}",
             "",
         ]
     return resume_latex + "\n".join(lines)
@@ -383,7 +385,7 @@ def _add_projects(
     if not resume_info.projects:
         return resume_latex
 
-    lines = [_section(template, "Projects"), r"\resumeSubHeadingListStart"]
+    lines = [_section(template, "Projects"), r"\resumeProjectHeadingListStart"]
     for project in resume_info.projects:
         left, right = _project_heading(project)
         lines.append(rf"\resumeProjectHeading{{{left}}}{{{right}}}")
@@ -393,7 +395,7 @@ def _add_projects(
             lines.append(rf"\resumeItem{{{_fmt_body(point)}}}")
         lines.append(r"\resumeItemListEnd")
         lines.append("")
-    lines.append(r"\resumeSubHeadingListEnd")
+    lines.append(r"\resumeProjectHeadingListEnd")
     lines.append("")
     return resume_latex + "\n".join(lines)
 

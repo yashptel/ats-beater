@@ -46,11 +46,15 @@ def test_build_resume_mono_template_uses_typewriter_style():
     assert r"\renewcommand{\familydefault}{\ttdefault}" in latex
     assert r"\section{SUMMARY}" in latex
     assert r"\section{Summary}" not in latex
-    assert r"{\ttfamily\bfseries\fontsize{21.5pt}{24pt}\selectfont John Doe}" in latex
-    assert r"\end{center}\vspace{-6pt}" in latex
+    assert r"{\ttfamily\bfseries\fontsize{22pt}{25.3pt}\selectfont John Doe}" in latex
+    assert r"\vspace{14pt}" in latex
+    assert r"{\ttfamily\bfseries\fontsize{22pt}{25.3pt}\selectfont John Doe}\\[6pt]" in latex
+    assert r"{\ttfamily\bfseries\fontsize{22pt}{25.3pt}\selectfont John Doe}\\\\[6pt]" not in latex
+    assert r"Remote\\[0pt]" in latex
+    assert r"\end{center}\vspace{-6pt}" not in latex
 
 
-def test_build_resume_mono_template_uses_tighter_google_docs_inspired_spacing():
+def test_build_resume_mono_template_uses_google_docs_spacing():
     info = CustomResumeInfo(
         name="John Doe",
         email="john@example.com",
@@ -59,17 +63,28 @@ def test_build_resume_mono_template_uses_tighter_google_docs_inspired_spacing():
 
     latex = build_resume(info, template_id="mono")
 
-    assert r"\linespread{1.0}" in latex
-    assert r"[\vspace{-4pt}\noindent\rule{\linewidth}{0.8pt}]" in latex
-    assert r"\titlespacing*{\section}{0pt}{9pt}{5pt}" in latex
+    assert r"\documentclass[letterpaper,11pt]{article}" in latex
+    assert r"\usepackage[letterpaper,top=0.7cm,bottom=0.5cm,left=1.8cm,right=1.8cm]{geometry}" in latex
+    assert r"\usepackage{setspace}" in latex
+    assert r"\setstretch{1.15}" in latex
+    assert r"\renewcommand{\arraystretch}{1.15}" in latex
+    assert r"\setlength{\parskip}{0pt}" in latex
+    assert r"\centering\ttfamily\bfseries\fontsize{12pt}{13.8pt}\selectfont" in latex
+    assert r"[\vspace{-8pt}\noindent\rule{\linewidth}{0.8pt}]" in latex
+    assert r"\titlespacing*{\section}{0pt}{8pt}{0pt}" in latex
     assert (
-        r"\begin{itemize}[leftmargin=0in,label={},itemsep=2pt,topsep=2pt,parsep=0pt,partopsep=0pt]"
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
     assert (
-        r"\begin{itemize}[leftmargin=0.30in,itemsep=4pt,topsep=4pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]"
         in latex
     )
+    assert (
+        r"\begin{itemize}[leftmargin=0.30in,itemsep=6pt,topsep=8pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
+        in latex
+    )
+    assert r"\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{6pt}}" in latex
 
 
 def test_build_resume_hybrid_template_keeps_proportional_body():
@@ -164,6 +179,23 @@ def test_build_resume_with_skills():
     assert r"\textbf{Languages:}" in latex
     assert "Python" in latex
     assert "FastAPI" in latex
+
+
+def test_build_resume_mono_template_gives_skills_custom_line_spacing():
+    info = CustomResumeInfo(
+        name="Test",
+        email="test@test.com",
+        skills=CustomSkills(languages=["Python", "Java"]),
+    )
+
+    latex = build_resume(info, template_id="mono")
+
+    assert r"{\setstretch{1.3}" in latex
+    assert (
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=0pt,parsep=0pt,partopsep=0pt]"
+        in latex
+    )
+    assert latex.index(r"{\setstretch{1.3}") < latex.index(r"\textbf{Languages:}")
 
 
 def test_build_resume_with_summary():
@@ -335,10 +367,15 @@ def test_build_resume_with_projects():
             )
         ],
     )
-    latex = build_resume(info)
-    assert "Projects" in latex
+    latex = build_resume(info, template_id="mono")
+    assert "PROJECTS" in latex
     assert "MyProject" in latex
     assert r"\resumeProjectHeading" in latex
+    assert r"\end{tabular*}\vspace{-4pt}" in latex
+    assert (
+        r"\begin{itemize}[leftmargin=0in,label={},itemsep=0pt,topsep=10pt,parsep=0pt,partopsep=0pt]"
+        in latex
+    )
     assert (
         r"\resumeProjectHeading{\textbf{MyProject}}{\href{https://github.com/test}{github.com/\allowbreak{}test}}"
         in latex
