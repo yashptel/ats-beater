@@ -191,18 +191,19 @@ def _start_document(template: ResumeTemplate) -> str:
 \raggedbottom
 \setlength{{\emergencystretch}}{{2em}}
 \sloppy
+\linespread{{1.02}}
 \setlength{{\parindent}}{{0pt}}
 
 \titleformat{{\section}}[block]
   {{\centering\ttfamily\bfseries}}
   {{}}{{0pt}}
   {{}}
-  [\vspace{{-2pt}}\noindent\rule{{\linewidth}}{{0.6pt}}]
-\titlespacing*{{\section}}{{0pt}}{{12pt}}{{6pt}}
+  [\vspace{{-3pt}}\noindent\rule{{\linewidth}}{{0.8pt}}]
+\titlespacing*{{\section}}{{0pt}}{{14pt}}{{7pt}}
 
 \pdfgentounicode=1
 
-\newcommand{{\resumeItem}}[1]{{\item\small{{#1}}}}
+\newcommand{{\resumeItem}}[1]{{\item{{#1}}}}
 
 \newcommand{{\resumeSubheading}}[4]{{%
   \Needspace{{4\baselineskip}}%
@@ -210,13 +211,13 @@ def _start_document(template: ResumeTemplate) -> str:
   \begin{{tabular*}}{{0.99\textwidth}}[t]{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
     \if\relax\detokenize{{#4}}\relax #1\else #1, #4\fi & #2 \\
   \end{{tabular*}}\\*[1pt]
-  \textbf{{\small #3}}\vspace{{-1pt}}
+  \textbf{{#3}}\vspace{{-1pt}}
 }}
 
 \newcommand{{\resumeProjectHeading}}[2]{{%
   \item[]%
   \begin{{tabular*}}{{0.99\textwidth}}{{@{{}}l@{{\extracolsep{{\fill}}}}r@{{}}}}
-    \small #1 & \small #2 \\
+    #1 & #2 \\
   \end{{tabular*}}\vspace{{-3pt}}
 }}
 
@@ -224,8 +225,8 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \newcommand{{\resumeSubHeadingListStart}}{{\begin{{itemize}}[leftmargin=0in, label={{}}]}}
 \newcommand{{\resumeSubHeadingListEnd}}{{\end{{itemize}}}}
-\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.24in,itemsep=5pt,topsep=6pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
-\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{2pt}}}}
+\newcommand{{\resumeItemListStart}}{{\begin{{itemize}}[leftmargin=0.30in,itemsep=6pt,topsep=7pt,parsep=0pt,partopsep=0pt,label=$\bullet$]}}
+\newcommand{{\resumeItemListEnd}}{{\end{{itemize}}\vspace{{3pt}}}}
 """
 
 
@@ -266,12 +267,12 @@ def _add_header(
         lines = [
             r"\begin{document}",
             r"\begin{center}",
-            rf"    {{\LARGE\ttfamily\bfseries {resume_info.name}}}\\[4pt]",
+            rf"    {{\huge\ttfamily\bfseries {resume_info.name}}}\\[5pt]",
         ]
         if primary_parts:
-            lines.append(r"    \small " + r" $\cdot$ ".join(primary_parts) + r"\\[3pt]")
+            lines.append(r"    " + r" $\cdot$ ".join(primary_parts) + r"\\[4pt]")
         if secondary_parts:
-            lines.append(r"    \small " + r" $\cdot$ ".join(secondary_parts))
+            lines.append(r"    " + r" $\cdot$ ".join(secondary_parts))
         lines.append(r"\end{center}")
         return resume_latex + "\n".join(lines) + "\n"
 
@@ -293,7 +294,7 @@ def _add_summary(
         return resume_latex
     lines = [
         _section(template, "Summary"),
-        rf"\small{{{_fmt_body(resume_info.summary)}}}",
+        rf"{{{_fmt_body(resume_info.summary)}}}",
         "",
     ]
     return resume_latex + "\n".join(lines)
@@ -333,9 +334,9 @@ def _add_skills(
         lines = [
             _section(template, "Technical Skills"),
             r"\begin{itemize}[leftmargin=0in, label={}]",
-            r"    \small{\item[]{",
+            r"    \item[]{",
             "     " + r" \\ ".join(skill_rows),
-            r"    }}",
+            r"    }",
             r"\end{itemize}",
             "",
         ]

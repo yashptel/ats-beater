@@ -46,10 +46,10 @@ def test_build_resume_mono_template_uses_typewriter_style():
     assert r"\renewcommand{\familydefault}{\ttdefault}" in latex
     assert r"\section{SUMMARY}" in latex
     assert r"\section{Summary}" not in latex
-    assert r"{\LARGE\ttfamily\bfseries John Doe}" in latex
+    assert r"{\huge\ttfamily\bfseries John Doe}" in latex
 
 
-def test_build_resume_mono_template_keeps_rule_tight_under_section_title():
+def test_build_resume_mono_template_uses_roomier_google_docs_inspired_spacing():
     info = CustomResumeInfo(
         name="John Doe",
         email="john@example.com",
@@ -58,8 +58,13 @@ def test_build_resume_mono_template_keeps_rule_tight_under_section_title():
 
     latex = build_resume(info, template_id="mono")
 
-    assert r"[\vspace{-2pt}\noindent\rule{\linewidth}{0.6pt}]" in latex
-    assert r"\titlespacing*{\section}{0pt}{12pt}{6pt}" in latex
+    assert r"\linespread{1.02}" in latex
+    assert r"[\vspace{-3pt}\noindent\rule{\linewidth}{0.8pt}]" in latex
+    assert r"\titlespacing*{\section}{0pt}{14pt}{7pt}" in latex
+    assert (
+        r"\begin{itemize}[leftmargin=0.30in,itemsep=6pt,topsep=7pt,parsep=0pt,partopsep=0pt,label=$\bullet$]"
+        in latex
+    )
 
 
 def test_build_resume_hybrid_template_keeps_proportional_body():
