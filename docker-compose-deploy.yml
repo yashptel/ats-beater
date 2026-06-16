@@ -33,7 +33,6 @@ services:
         condition: service_healthy
     networks:
       - resume-internal
-      - cloudflare-tunnel-network
 
 volumes:
   pgdata:
@@ -42,5 +41,3 @@ volumes:
 
 networks:
   resume-internal:
-  cloudflare-tunnel-network:
-    external: true
