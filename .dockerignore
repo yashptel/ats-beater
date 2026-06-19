@@ -1,5 +1,9 @@
-.venv/
+.venv*/
+venv*/
+env*/
 .env
+.env.*
+!.env.example
 .git/
 .gitignore
 .python-version
@@ -9,6 +13,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 tests/
 *.egg-info/
 dist/
