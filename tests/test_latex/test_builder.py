@@ -144,6 +144,31 @@ def test_build_resume_mono_template_adds_wrapping_guardrails():
     assert r"oss-serverless/\allowbreak{}serverless" in latex
 
 
+def test_resume_templates_disable_automatic_word_hyphenation():
+    info = CustomResumeInfo(
+        name="John Doe",
+        email="john@example.com",
+        skills=CustomSkills(
+            frameworks=[
+                "Node.js",
+                "Temporal Workflows",
+            ],
+            other_technologies=[
+                "Kubernetes",
+                "OpenAI/Anthropic/Gemini APIs",
+            ],
+        ),
+    )
+
+    for template_id in ("jake", "mono", "hybrid"):
+        latex = build_resume(info, template_id=template_id)
+        assert r"\hyphenpenalty=10000" in latex
+        assert r"\exhyphenpenalty=10000" in latex
+        assert "Temporal Workflows" in latex
+        assert "Kubernetes" in latex
+        assert r"OpenAI/\allowbreak{}Anthropic/\allowbreak{}Gemini APIs" in latex
+
+
 def test_build_resume_with_experience():
     info = CustomResumeInfo(
         name="Jane",

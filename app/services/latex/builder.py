@@ -118,6 +118,9 @@ def _start_document(template: ResumeTemplate) -> str:
 \urlstyle{same}
 \raggedbottom
 \raggedright
+% Keep technical terms intact instead of splitting words across lines.
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
 \setlength{\tabcolsep}{0in}
 \newlength{\datecolumnwidth}
 \setlength{\datecolumnwidth}{1.75in}
@@ -194,6 +197,9 @@ def _start_document(template: ResumeTemplate) -> str:
 
 \urlstyle{{same}}
 \raggedbottom
+% Keep technical terms intact instead of splitting words across lines.
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
 \setlength{{\emergencystretch}}{{2em}}
 \sloppy
 \setstretch{{1.1}}
