@@ -4,7 +4,7 @@ Open-source AI-powered resume tailoring service. Upload your PDF resume, paste a
 
 Built with FastAPI, Vue 3, Google Gemini, and LaTeX.
 
-**Live at [resume.debugblackbox.com](http://resume.debugblackbox.com/)**
+**Live at [resume.squiwo.com](http://resume.squiwo.com/)**
 
 ## How It Works
 
